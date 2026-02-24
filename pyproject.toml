@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contextprune"
+version = "0.1.0"
+description = "Cut your LLM API costs by 40-80% with 2 lines of code"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "contextprune contributors" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "anthropic>=0.25.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+fast = ["sentence-transformers>=2.0.0", "numpy>=1.24.0"]
+dev = ["pytest", "pytest-cov"]
+
+[project.scripts]
+contextprune = "contextprune.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["contextprune*"]

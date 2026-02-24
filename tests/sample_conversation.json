@@ -1,0 +1,29 @@
+{
+  "system": "You are an expert software development assistant. You help users write, debug, and review code. Always follow best practices for code quality and security.",
+  "messages": [
+    {"role": "user", "content": "You are an expert software assistant. You help with coding tasks. The project uses Python 3.12 and FastAPI. The database is PostgreSQL on port 5432."},
+    {"role": "assistant", "content": "I understand the project setup. How can I help you today?"},
+    {"role": "user", "content": "The project uses Python 3.12 and FastAPI for the web framework. The database is PostgreSQL on port 5432. I need to create a new user registration endpoint."},
+    {"role": "assistant", "content": "I'll create a user registration endpoint for you."},
+    {"role": "user", "content": "Make sure to follow best practices for code quality and security. Add input validation and proper error handling."},
+    {"role": "assistant", "content": "I'll implement proper validation and security measures."},
+    {"role": "user", "content": "The database is PostgreSQL on port 5432. Can you also add rate limiting to the endpoint?"}
+  ],
+  "tools": [
+    {"name": "read_file", "description": "Read file contents from disk", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}},
+    {"name": "write_file", "description": "Write content to a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}}},
+    {"name": "list_dir", "description": "List directory contents", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}},
+    {"name": "search_code", "description": "Search codebase for patterns", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+    {"name": "run_tests", "description": "Run pytest test suite", "input_schema": {"type": "object", "properties": {}}},
+    {"name": "run_command", "description": "Execute shell command", "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}}},
+    {"name": "git_diff", "description": "Show git diff", "input_schema": {"type": "object", "properties": {}}},
+    {"name": "git_commit", "description": "Create git commit", "input_schema": {"type": "object", "properties": {"message": {"type": "string"}}}},
+    {"name": "get_weather", "description": "Get weather forecast for a location", "input_schema": {"type": "object", "properties": {"location": {"type": "string"}}}},
+    {"name": "send_email", "description": "Send an email message", "input_schema": {"type": "object", "properties": {"to": {"type": "string"}, "body": {"type": "string"}}}},
+    {"name": "create_calendar", "description": "Create calendar event", "input_schema": {"type": "object", "properties": {"title": {"type": "string"}}}},
+    {"name": "web_search", "description": "Search the web", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+    {"name": "stock_price", "description": "Get current stock price", "input_schema": {"type": "object", "properties": {"ticker": {"type": "string"}}}},
+    {"name": "translate", "description": "Translate text between languages", "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}}},
+    {"name": "resize_image", "description": "Resize an image", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}}
+  ]
+}
