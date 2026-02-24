@@ -1,17 +1,83 @@
 """Integration tests for the full compression pipeline.
 
 Uses mock Anthropic client -- no real API calls.
+Embedding model is also mocked to avoid downloading 137MB in CI.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from unittest.mock import MagicMock
+
+import numpy as np
+import pytest
 
 from contextprune import Config, wrap
 from contextprune.core import wrap_openai
 from contextprune.stats import CompressionStats
 from contextprune.tokenizer import count_message_tokens, count_system_tokens, count_tools_tokens
+
+# ---------------------------------------------------------------------------
+# Embedding mock — same keyword-group approach as test_dedup.py / test_tool_filter.py
+# ---------------------------------------------------------------------------
+
+_KEYWORD_GROUPS = [
+    (["postgresql", "database", "port 5432", "fastapi", "framework"], 0),
+    (["weather", "forecast"], 1),
+    (["python", "code", "pytest", "tests", "testing", "type hints", "type annotations", "type hint"], 2),
+    (["file", "read", "write", "directory"], 3),
+    (["sql", "query"], 4),
+    (["web", "search"], 5),
+    (["email", "calendar"], 6),
+    (["helpful", "assistant", "expert", "software"], 7),
+    (["docker", "deployment", "deploy"], 8),
+    (["react", "frontend", "backend", "authentication", "login", "endpoint", "api", "fastapi", "credential"], 9),
+    (["stock", "price", "financial", "market"], 10),
+    (["git", "commit", "diff"], 11),
+    (["run", "command", "shell", "bash"], 12),
+]
+
+_DIM = 20
+_embed_cache: dict = {}
+_unique_counter = [len(_KEYWORD_GROUPS)]
+
+
+def _mock_embed(texts, model_name, prefix=""):
+    results = []
+    for text in texts:
+        clean = re.sub(r"^(search_document: |search_query: )", "", text).lower()
+        if clean not in _embed_cache:
+            best_group = None
+            best_count = 0
+            for keywords, group_idx in _KEYWORD_GROUPS:
+                count = sum(1 for kw in keywords if kw in clean)
+                if count > best_count:
+                    best_count = count
+                    best_group = group_idx
+            vec = np.zeros(_DIM)
+            if best_group is not None:
+                vec[best_group] = 1.0
+            else:
+                slot = _unique_counter[0] % _DIM
+                _unique_counter[0] += 1
+                vec[slot] = 1.0
+            _embed_cache[clean] = vec
+        results.append(_embed_cache[clean])
+    return np.array(results, dtype=np.float32)
+
+
+def _mock_cosine_sim(a, b):
+    return float(np.dot(a, b))
+
+
+@pytest.fixture(autouse=True)
+def patch_embeddings(monkeypatch):
+    """Mock embedding functions for the full pipeline integration tests."""
+    monkeypatch.setattr("contextprune.embeddings.embed", _mock_embed)
+    monkeypatch.setattr("contextprune.embeddings.cosine_similarity", _mock_cosine_sim)
+    _embed_cache.clear()
+    _unique_counter[0] = len(_KEYWORD_GROUPS)
 
 
 def _make_tool(name: str, description: str) -> dict:

@@ -1,163 +1,247 @@
-"""Semantic deduplication across messages.
+"""Semantic deduplication across messages using embedding-based similarity.
 
 Detects and removes semantically redundant content across messages using
-TF-IDF cosine similarity. Sentences that are too similar to earlier sentences
-get pruned.
+sentence-transformer embeddings. Chunks that are too similar to earlier chunks
+get pruned, preserving earlier occurrences over later ones.
+
+Default model: nomic-ai/nomic-embed-text-v1.5 (2048-token context window,
+Apache 2.0 license). Falls back to all-MiniLM-L6-v2 (22MB, 256-token context).
 """
 
 from __future__ import annotations
 
-import math
 import re
-from collections import Counter
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+
+_DEFAULT_MODEL = "nomic-ai/nomic-embed-text-v1.5"
+_FALLBACK_MODEL = "all-MiniLM-L6-v2"
+
+# nomic-embed-text-v1.5 requires task prefixes for optimal retrieval performance.
+# See: https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
+_STORE_PREFIX = "search_document: "   # prefix for chunks stored in the seen pool
+_QUERY_PREFIX = "search_query: "      # prefix for chunks being compared against pool
 
 
-def _sentence_split(text: str) -> List[str]:
-    """Split text into sentences."""
-    # Split on sentence-ending punctuation followed by whitespace or end of string
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
-    return [s.strip() for s in parts if s.strip()]
+def _split_chunks(text: str, chunk_by: str = "sentence") -> List[str]:
+    """Split text into chunks using the specified strategy.
+
+    Args:
+        text: Input text to split.
+        chunk_by: Splitting strategy. One of:
+            - "sentence": Split on sentence-ending punctuation (default).
+            - "paragraph": Split on blank lines.
+            - "chunk": Split on single newlines.
+
+    Returns:
+        List of non-empty chunk strings.
+    """
+    if chunk_by == "sentence":
+        parts = re.split(r"(?<=[.!?])\s+", text.strip())
+        return [s.strip() for s in parts if s.strip()]
+    elif chunk_by == "paragraph":
+        parts = re.split(r"\n\s*\n", text.strip())
+        return [p.strip() for p in parts if p.strip()]
+    elif chunk_by == "chunk":
+        parts = re.split(r"\n+", text.strip())
+        return [p.strip() for p in parts if p.strip()]
+    else:
+        raise ValueError(
+            f"Unknown chunk_by: {chunk_by!r}. Use 'sentence', 'paragraph', or 'chunk'."
+        )
 
 
-def _tokenize(text: str) -> List[str]:
-    """Simple whitespace + lowercase tokenizer."""
-    return re.findall(r"[a-z0-9]+", text.lower())
+def _count_tokens_approx(text: str) -> int:
+    """Rough token count: ~4 characters per token."""
+    return max(1, len(text) // 4)
 
 
-def _build_idf(documents: List[List[str]]) -> Dict[str, float]:
-    """Build IDF scores from a list of tokenized documents."""
-    n = len(documents)
-    if n == 0:
-        return {}
-    df: Counter = Counter()
-    for doc in documents:
-        unique = set(doc)
-        for token in unique:
-            df[token] += 1
-    return {token: math.log((n + 1) / (freq + 1)) + 1 for token, freq in df.items()}
-
-
-def _tfidf_vector(tokens: List[str], idf: Dict[str, float]) -> Dict[str, float]:
-    """Compute TF-IDF vector for a tokenized document."""
-    tf: Counter = Counter(tokens)
-    vec: Dict[str, float] = {}
-    for token, count in tf.items():
-        vec[token] = count * idf.get(token, 1.0)
-    return vec
-
-
-def _cosine_sim(a: Dict[str, float], b: Dict[str, float]) -> float:
-    """Cosine similarity between two sparse vectors."""
-    if not a or not b:
-        return 0.0
-    common = set(a.keys()) & set(b.keys())
-    dot = sum(a[k] * b[k] for k in common)
-    norm_a = math.sqrt(sum(v * v for v in a.values()))
-    norm_b = math.sqrt(sum(v * v for v in b.values()))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
+def _require_embeddings():
+    """Import embeddings module with a helpful error on missing deps."""
+    try:
+        from . import embeddings
+        return embeddings
+    except ImportError:
+        pass
+    try:
+        import contextprune.embeddings as embeddings
+        return embeddings
+    except ImportError:
+        pass
+    raise ImportError(
+        "sentence-transformers is required for SemanticDeduplicator. "
+        "Install it with: pip install sentence-transformers"
+    )
 
 
 class SemanticDeduplicator:
-    """Remove semantically redundant sentences across messages."""
+    """Remove semantically redundant content across messages using embeddings.
 
-    def __init__(self, similarity_threshold: float = 0.85) -> None:
+    Uses sentence-transformer embeddings to detect near-duplicate chunks
+    across the entire message history. Earlier occurrences are kept; later
+    duplicates are pruned.
+
+    Algorithm:
+        1. Split each message into chunks (sentences by default).
+        2. Batch-embed all eligible chunks (one encode() call per message).
+        3. For each chunk: compute cosine similarity against all previously-kept
+           chunks across the entire conversation.
+        4. If max similarity >= threshold: mark as duplicate and skip.
+        5. If below threshold: keep and add to the seen pool.
+        6. Reconstruct message content from kept chunks only.
+
+    The default threshold (0.82) is a starting point. For research use, tune via
+    grid search (0.70, 0.75, 0.80, 0.82, 0.85, 0.90, 0.95) on your validation set.
+
+    Attributes:
+        removal_log: List of (removed_chunk, best_matching_kept_chunk, score)
+            tuples, populated after each call to deduplicate(). Useful for
+            error analysis and threshold tuning.
+    """
+
+    def __init__(
+        self,
+        similarity_threshold: float = 0.82,
+        model: str = _DEFAULT_MODEL,
+        chunk_by: str = "sentence",
+        min_chunk_tokens: int = 5,
+        preserve_first: bool = True,
+    ) -> None:
+        """Initialize the deduplicator.
+
+        Args:
+            similarity_threshold: Cosine similarity threshold above which a
+                chunk is considered a duplicate. Range [0, 1]. Default: 0.82.
+            model: HuggingFace model name. Default: nomic-ai/nomic-embed-text-v1.5.
+                Use "minilm" or "all-MiniLM-L6-v2" for the fast 22MB fallback.
+            chunk_by: Splitting strategy: "sentence" | "paragraph" | "chunk".
+            min_chunk_tokens: Minimum estimated token count for a chunk to be
+                eligible for deduplication (estimated as len(text)//4). Very
+                short fragments like "OK.", "Sure.", single-word replies
+                (< 5 estimated tokens / ~20 chars) are passed through unchanged.
+                Default: 5.
+            preserve_first: Always keep the first occurrence of any content
+                (never removes the first chunk seen). Default: True.
+        """
+        # Normalize shorthand model names
+        if model == "minilm":
+            model = _FALLBACK_MODEL
         self.similarity_threshold = similarity_threshold
+        self.model = model
+        self.chunk_by = chunk_by
+        self.min_chunk_tokens = min_chunk_tokens
+        self.preserve_first = preserve_first
+        self.removal_log: List[Tuple[str, str, float]] = []
 
     def deduplicate(
         self,
         messages: List[Dict[str, Any]],
         system: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], Optional[str], int]:
-        """Deduplicate messages and system prompt.
+        """Deduplicate messages and optional system prompt.
 
-        Returns (new_messages, new_system, sentences_removed).
-        Later messages are pruned in favor of earlier ones.
+        Processes the system prompt first (if provided), then messages in order.
+        Later duplicates are pruned in favor of earlier occurrences.
+
+        Args:
+            messages: List of message dicts with "role" and "content" keys.
+            system: Optional system prompt string.
+
+        Returns:
+            Tuple of (new_messages, new_system, sentences_removed):
+                - new_messages: Messages with duplicate chunks removed.
+                - new_system: System prompt with duplicate chunks removed (or
+                  the original if unchanged / not provided).
+                - sentences_removed: Total number of chunks removed.
         """
-        # Collect all sentences with their source info
-        all_sentences: List[Tuple[str, str, int, int]] = []
-        # (sentence_text, source_type, source_index, sentence_index)
+        emb = _require_embeddings()
 
-        if system:
-            for i, sent in enumerate(_sentence_split(system)):
-                all_sentences.append((sent, "system", 0, i))
+        # Global pool of kept embeddings (document-prefixed, L2-normalized)
+        seen_embeddings: List[np.ndarray] = []
+        seen_texts: List[str] = []  # parallel to seen_embeddings for logging
+        self.removal_log = []
+        removed_count = 0
 
-        for msg_idx, msg in enumerate(messages):
-            content = msg.get("content", "")
-            if isinstance(content, str) and content.strip():
-                for i, sent in enumerate(_sentence_split(content)):
-                    all_sentences.append((sent, "message", msg_idx, i))
+        def process_chunks(chunks: List[str]) -> List[str]:
+            """Process chunks, returning only the non-duplicate ones."""
+            nonlocal seen_embeddings, seen_texts, removed_count
 
-        if len(all_sentences) < 2:
-            return messages, system, 0
+            if not chunks:
+                return chunks
 
-        # Tokenize all sentences
-        tokenized = [_tokenize(s[0]) for s in all_sentences]
+            # Separate tiny chunks (pass through) from eligible (dedup-worthy) chunks
+            eligible_indices: List[int] = []
+            for i, chunk in enumerate(chunks):
+                if _count_tokens_approx(chunk) >= self.min_chunk_tokens:
+                    eligible_indices.append(i)
 
-        # Build IDF across all sentences
-        idf = _build_idf(tokenized)
+            if not eligible_indices:
+                return chunks  # All too short — pass everything through
 
-        # Compute TF-IDF vectors
-        vectors = [_tfidf_vector(t, idf) for t in tokenized]
+            eligible_texts = [chunks[i] for i in eligible_indices]
 
-        # Mark duplicates: later sentences that are too similar to earlier ones
-        removed_indices: Set[int] = set()
-        for i in range(len(all_sentences)):
-            if i in removed_indices:
-                continue
-            # Skip very short sentences (less than 3 tokens) -- not worth deduping
-            if len(tokenized[i]) < 3:
-                continue
-            for j in range(i + 1, len(all_sentences)):
-                if j in removed_indices:
-                    continue
-                if len(tokenized[j]) < 3:
-                    continue
-                sim = _cosine_sim(vectors[i], vectors[j])
-                if sim >= self.similarity_threshold:
-                    removed_indices.add(j)
+            # Batch embed with document prefix (for storage in the seen pool)
+            doc_embs = emb.embed(eligible_texts, self.model, prefix=_STORE_PREFIX)
+            # Batch embed with query prefix (for comparison against the seen pool)
+            qry_embs = emb.embed(eligible_texts, self.model, prefix=_QUERY_PREFIX)
 
-        removed_count = len(removed_indices)
+            remove_set: set = set()
+            if seen_embeddings:
+                # Vectorized similarity computation: compare all query embeddings
+                # against all seen embeddings in one matrix multiplication
+                seen_matrix = np.vstack(seen_embeddings)  # (n_seen, dim)
+                qry_matrix = qry_embs  # (n_chunks, dim)
+                # Dot product of normalized vectors = cosine similarity (batched)
+                sim_matrix = qry_matrix @ seen_matrix.T  # (n_chunks, n_seen)
 
-        # Rebuild system prompt
-        new_system = system
-        if system:
-            system_sentences = [
-                all_sentences[i][0]
-                for i in range(len(all_sentences))
-                if all_sentences[i][1] == "system" and i not in removed_indices
-            ]
-            if system_sentences:
-                new_system = " ".join(system_sentences)
-            elif removed_count > 0:
-                # All system sentences removed -- keep the original
-                new_system = system
+                # Process each chunk
+                for local_idx, orig_idx in enumerate(eligible_indices):
+                    chunk = chunks[orig_idx]
+                    doc_emb = doc_embs[local_idx]
+                    sims = sim_matrix[local_idx]
+                    max_sim = float(sims.max())
+                    best_match_idx = int(sims.argmax())
 
-        # Rebuild messages
-        new_messages = []
-        for msg_idx, msg in enumerate(messages):
-            content = msg.get("content", "")
-            if isinstance(content, str) and content.strip():
-                kept_sentences = [
-                    all_sentences[i][0]
-                    for i in range(len(all_sentences))
-                    if all_sentences[i][1] == "message"
-                    and all_sentences[i][2] == msg_idx
-                    and i not in removed_indices
-                ]
-                if kept_sentences:
-                    new_msg = dict(msg)
-                    new_msg["content"] = " ".join(kept_sentences)
-                    new_messages.append(new_msg)
-                else:
-                    # Keep the message but with minimal content to preserve structure
-                    new_msg = dict(msg)
-                    new_msg["content"] = content
-                    new_messages.append(new_msg)
+                    if max_sim >= self.similarity_threshold:
+                        remove_set.add(orig_idx)
+                        removed_count += 1
+                        self.removal_log.append(
+                            (chunk, seen_texts[best_match_idx], max_sim)
+                        )
+                    else:
+                        seen_embeddings.append(doc_emb)
+                        seen_texts.append(chunk)
             else:
-                # Non-string content (tool results, images, etc) -- pass through
+                # First chunk ever — always keep (preserve_first semantics)
+                # Add all eligible chunks from first message
+                for local_idx, orig_idx in enumerate(eligible_indices):
+                    seen_embeddings.append(doc_embs[local_idx])
+                    seen_texts.append(chunks[orig_idx])
+
+            # Reconstruct: keep tiny chunks + non-duplicate eligible chunks
+            return [c for i, c in enumerate(chunks) if i not in remove_set]
+
+        # --- Process system prompt first ---
+        new_system = system
+        if system and system.strip():
+            sys_chunks = _split_chunks(system, self.chunk_by)
+            kept_sys = process_chunks(sys_chunks)
+            # Reconstruct with spaces; fall back to original if everything got removed
+            new_system = " ".join(kept_sys) if kept_sys else system
+
+        # --- Process messages in order ---
+        new_messages: List[Dict[str, Any]] = []
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, str) and content.strip():
+                chunks = _split_chunks(content, self.chunk_by)
+                kept_chunks = process_chunks(chunks)
+                new_msg = dict(msg)
+                new_msg["content"] = " ".join(kept_chunks) if kept_chunks else content
+                new_messages.append(new_msg)
+            else:
+                # Non-string content (tool results, images, etc.) — pass through
                 new_messages.append(msg)
 
         return new_messages, new_system, removed_count

@@ -20,7 +20,10 @@ class Config:
     tool_filter: bool = True
     budget_injection: bool = True
     max_tools: int = 10
-    similarity_threshold: float = 0.85
+    similarity_threshold: float = 0.82
+    min_chunk_tokens: int = 5
+    dedup_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    tool_model: str = "nomic-ai/nomic-embed-text-v1.5"
     verbose: bool = False
 
 
@@ -48,9 +51,14 @@ class _CompressedMessages:
         self._original = original_messages
         self._config = config
         self._dedup = SemanticDeduplicator(
-            similarity_threshold=config.similarity_threshold
+            similarity_threshold=config.similarity_threshold,
+            model=config.dedup_model,
+            min_chunk_tokens=config.min_chunk_tokens,
         )
-        self._tool_filter = ToolSchemaFilter(max_tools=config.max_tools)
+        self._tool_filter = ToolSchemaFilter(
+            max_tools=config.max_tools,
+            model=config.tool_model,
+        )
         self._budget = TokenBudgetInjector()
 
     def create(self, **kwargs: Any) -> Any:
@@ -146,7 +154,12 @@ class WrappedClient:
         return getattr(self._client, name)
 
 
-def wrap(client: Any, config: Optional[Config] = None) -> WrappedClient:
+def wrap(
+    client: Any,
+    config: Optional[Config] = None,
+    *,
+    dedup_model: Optional[str] = None,
+) -> WrappedClient:
     """Wrap an Anthropic client with compression middleware.
 
     Usage:
@@ -156,9 +169,22 @@ def wrap(client: Any, config: Optional[Config] = None) -> WrappedClient:
         client = wrap(anthropic.Anthropic())
         response = client.messages.create(...)
         print(response.compression_stats)
+
+        # Use the lighter 22MB model (faster cold start):
+        client = wrap(anthropic.Anthropic(), dedup_model="all-MiniLM-L6-v2")
+
+    Args:
+        client: An Anthropic client instance.
+        config: Full Config object. Mutually usable with dedup_model shorthand.
+        dedup_model: Shorthand to set the embedding model for both dedup and
+            tool filter. Overrides config.dedup_model and config.tool_model.
     """
     if config is None:
         config = Config()
+    if dedup_model is not None:
+        config = dataclasses.replace(
+            config, dedup_model=dedup_model, tool_model=dedup_model
+        )
     return WrappedClient(client, config)
 
 
@@ -172,9 +198,14 @@ class _CompressedChatCompletions:
         self._original = original_completions
         self._config = config
         self._dedup = SemanticDeduplicator(
-            similarity_threshold=config.similarity_threshold
+            similarity_threshold=config.similarity_threshold,
+            model=config.dedup_model,
+            min_chunk_tokens=config.min_chunk_tokens,
         )
-        self._tool_filter = ToolSchemaFilter(max_tools=config.max_tools)
+        self._tool_filter = ToolSchemaFilter(
+            max_tools=config.max_tools,
+            model=config.tool_model,
+        )
         self._budget = TokenBudgetInjector()
 
     def create(self, **kwargs: Any) -> Any:

@@ -25,12 +25,19 @@ classifiers = [
 ]
 dependencies = [
     "anthropic>=0.25.0",
+    "sentence-transformers>=3.0.0",
+    "numpy>=1.24.0",
+    "einops>=0.7.0",
 ]
 
 [project.optional-dependencies]
 openai = ["openai>=1.0.0"]
-fast = ["sentence-transformers>=2.0.0", "numpy>=1.24.0"]
 dev = ["pytest", "pytest-cov"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that require a real embedding model (downloads ~137MB on first run)",
+]
 
 [project.scripts]
 contextprune = "contextprune.cli:main"

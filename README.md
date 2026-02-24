@@ -36,8 +36,35 @@ Optional extras:
 
 ```bash
 pip install contextprune[openai]   # OpenAI support
-pip install contextprune[fast]     # sentence-transformers for better dedup
 ```
+
+## Embedding Models
+
+By default, `contextprprune` uses **nomic-ai/nomic-embed-text-v1.5** for embedding-based deduplication and tool filtering. This model was chosen because:
+
+- **2048-token context window** — critical for handling long agent contexts without truncation (unlike MiniLM's 256-token limit)
+- **Strong MTEB benchmarks** — competitive retrieval performance
+- **Apache 2.0 license** — permissive for commercial use
+
+For faster cold-start times, you can switch to the lighter model:
+
+```python
+from contextprune import wrap
+
+# Use the smaller 22MB model (~5ms per encode)
+client = wrap(anthropic.Anthropic(), dedup_model="all-MiniLM-L6-v2")
+```
+
+Or configure via Config:
+
+```python
+from contextprune import Config, wrap
+
+config = Config(dedup_model="all-MiniLM-L6-v2", tool_model="all-MiniLM-L6-v2")
+client = wrap(anthropic.Anthropic(), config=config)
+```
+
+**Note:** First-call model loading takes ~2 seconds. Subsequent calls are cached and take <30ms.
 
 ## Quick Start
 
