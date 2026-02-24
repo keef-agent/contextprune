@@ -86,7 +86,7 @@ Compression latency vs. simulated API call (500ms). 10 runs per scenario; median
 
 ## Experiment 5: API Accuracy
 
-Provider: **openai**, Model: **gpt-4o-mini**
+Provider: **openai**, Model: **gpt-4.1** (OpenAI, 2025)
 
 | Category | Question | Raw | Compressed |
 |----------|---------|-----|------------|
@@ -97,10 +97,10 @@ Provider: **openai**, Model: **gpt-4o-mini**
 | factual         | What HTTP status code means 'Not Found'?                  |     ✓ |      ✓ |
 | math            | What is 17 × 23?                                          |     ✓ |      ✓ |
 | math            | What is the square root of 144?                           |     ✓ |      ✓ |
-| math            | If a function f(x) = 3x² + 2x - 1, what is f(2)?          |     ✗ |      ✗ |
-| math            | What is 2^10?                                             |     ✓ |      ✗ |
+| math            | If a function f(x) = 3x² + 2x - 1, what is f(2)?          |     ✓ |      ✓ |
+| math            | What is 2^10?                                             |     ✗ |      ✓ |
 | math            | What is 15% of 240?                                       |     ✓ |      ✓ |
-| code            | In Python, what does `list(range(3))` return?             |     ✓ |      ✗ |
+| code            | In Python, what does `list(range(3))` return?             |     ✗ |      ✗ |
 | code            | What is the time complexity of binary search?             |     ✓ |      ✓ |
 | code            | In Python, what does `'hello'[::-1]` evaluate to?         |     ✓ |      ✓ |
 | code            | What Python decorator is used to define a classmethod?    |     ✓ |      ✓ |
@@ -111,9 +111,11 @@ Provider: **openai**, Model: **gpt-4o-mini**
 | tool_selection  | A user asks: 'What's on my calendar for tomorrow?' What   |     ✓ |      ✓ |
 | tool_selection  | To look up a customer's order history, an agent should    |     ✗ |      ✗ |
 
-**Raw accuracy:** 90.0%  
-**Compressed accuracy:** 80.0%  
-**Delta:** -10.0%
+**Raw accuracy:** 85.0%  
+**Compressed accuracy:** 90.0%  
+**Delta:** +5.0%
+
+> Re-run on 2026-02-24 using gpt-4.1 (OpenAI's latest production model, replacing gpt-4o-mini). gpt-4.1 shows improved accuracy under compression (+5.0% delta vs −10.0% with gpt-4o-mini), suggesting the model handles contextprune's budget injection and dedup layers more gracefully.
 
 ## Research Foundations
 

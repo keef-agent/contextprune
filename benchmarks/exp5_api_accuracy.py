@@ -299,7 +299,7 @@ def _run_with_openai(api_key: str) -> Dict[str, Any]:
     )
 
     results = []
-    model = "gpt-4o-mini"
+    model = "gpt-4.1"
 
     for q in TEST_QUESTIONS:
         msgs = [
