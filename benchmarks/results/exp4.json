@@ -1,0 +1,57 @@
+[
+  {
+    "scenario": "Agent+Memory",
+    "compression_median_ms": 4.76,
+    "compression_min_ms": 4.44,
+    "compression_max_ms": 5.46,
+    "simulated_api_ms": 500.0,
+    "total_ms": 504.76,
+    "overhead_pct": 0.94,
+    "meets_target": true,
+    "runs": 10
+  },
+  {
+    "scenario": "RAG Context",
+    "compression_median_ms": 11.64,
+    "compression_min_ms": 11.47,
+    "compression_max_ms": 11.84,
+    "simulated_api_ms": 500.0,
+    "total_ms": 511.64,
+    "overhead_pct": 2.27,
+    "meets_target": true,
+    "runs": 10
+  },
+  {
+    "scenario": "Tool-Heavy",
+    "compression_median_ms": 0.89,
+    "compression_min_ms": 0.87,
+    "compression_max_ms": 0.91,
+    "simulated_api_ms": 500.0,
+    "total_ms": 500.89,
+    "overhead_pct": 0.18,
+    "meets_target": true,
+    "runs": 10
+  },
+  {
+    "scenario": "Repetitive Chat",
+    "compression_median_ms": 2.88,
+    "compression_min_ms": 2.83,
+    "compression_max_ms": 2.93,
+    "simulated_api_ms": 500.0,
+    "total_ms": 502.88,
+    "overhead_pct": 0.57,
+    "meets_target": true,
+    "runs": 10
+  },
+  {
+    "scenario": "Code Agent",
+    "compression_median_ms": 1.71,
+    "compression_min_ms": 1.67,
+    "compression_max_ms": 1.73,
+    "simulated_api_ms": 500.0,
+    "total_ms": 501.71,
+    "overhead_pct": 0.34,
+    "meets_target": true,
+    "runs": 10
+  }
+]

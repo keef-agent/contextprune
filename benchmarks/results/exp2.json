@@ -1,0 +1,93 @@
+[
+  {
+    "scenario": "Agent+Memory",
+    "pairs_compared": 1,
+    "mean_similarity": 1.0,
+    "min_similarity": 1.0,
+    "max_similarity": 1.0,
+    "pct_above_085": 100.0,
+    "sentences_removed": 16,
+    "per_pair": [
+      {
+        "label": "system_prompt",
+        "similarity": 1.0
+      }
+    ]
+  },
+  {
+    "scenario": "RAG Context",
+    "pairs_compared": 1,
+    "mean_similarity": 1.0,
+    "min_similarity": 1.0,
+    "max_similarity": 1.0,
+    "pct_above_085": 100.0,
+    "sentences_removed": 0,
+    "per_pair": [
+      {
+        "label": "system_prompt",
+        "similarity": 1.0
+      }
+    ]
+  },
+  {
+    "scenario": "Tool-Heavy",
+    "pairs_compared": 1,
+    "mean_similarity": 1.0,
+    "min_similarity": 1.0,
+    "max_similarity": 1.0,
+    "pct_above_085": 100.0,
+    "sentences_removed": 0,
+    "per_pair": [
+      {
+        "label": "system_prompt",
+        "similarity": 1.0
+      }
+    ]
+  },
+  {
+    "scenario": "Repetitive Chat",
+    "pairs_compared": 5,
+    "mean_similarity": 0.6743,
+    "min_similarity": 0.4751,
+    "max_similarity": 1.0,
+    "pct_above_085": 20.0,
+    "sentences_removed": 36,
+    "per_pair": [
+      {
+        "label": "system_prompt",
+        "similarity": 1.0
+      },
+      {
+        "label": "user[2]",
+        "similarity": 0.6644
+      },
+      {
+        "label": "user[6]",
+        "similarity": 0.4751
+      },
+      {
+        "label": "user[10]",
+        "similarity": 0.6431
+      },
+      {
+        "label": "user[14]",
+        "similarity": 0.5891
+      }
+    ]
+  },
+  {
+    "scenario": "Code Agent",
+    "pairs_compared": 1,
+    "mean_similarity": 1.0,
+    "min_similarity": 1.0,
+    "max_similarity": 1.0,
+    "pct_above_085": 100.0,
+    "sentences_removed": 0,
+    "per_pair": [
+      {
+        "label": "system_prompt",
+        "similarity": 1.0
+      }
+    ]
+  }
+]

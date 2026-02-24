@@ -1,17 +1,30 @@
 # contextprune
 
-Cut your LLM API costs by 40-80% with 2 lines of code.
+Cut your LLM API costs with 2 lines of code.
 
-`contextprune` is a drop-in middleware that compresses your API requests before they hit the model. No prompt rewriting. No quality loss. Just fewer wasted tokens.
+`contextprune` is a drop-in middleware that compresses API requests before they hit the model. No prompt rewriting. No quality loss. Just fewer wasted tokens.
 
-## Results
+## Benchmark Results
 
-| Scenario | Before | After | Savings |
-|----------|--------|-------|---------|
-| Agent with 5 memory files | 48,234 tokens | 11,891 tokens | **75%** |
-| RAG with 10 retrieved docs | 32,100 tokens | 8,940 tokens | **72%** |
-| Chat with large system prompt | 12,450 tokens | 4,820 tokens | **61%** |
-| Tool-heavy agent (20 tools) | 24,600 tokens | 6,200 tokens | **75%** |
+Measured with tiktoken `cl100k_base`. Run: `python3 benchmarks/run_all.py`.
+
+| Scenario | Before | After | Savings | Notes |
+|----------|--------|-------|---------|-------|
+| Agent with 3 memory files (60% overlap) | 1,248 tokens | 1,033 tokens | **17%** | Dedup removed 16 redundant sentences |
+| RAG with 10 doc chunks (40% overlap) | 1,980 tokens | 1,990 tokens | **0%** | Chunks had insufficient sentence-level overlap |
+| Tool-heavy agent (20 tools, 2 topics) | 2,341 tokens | 1,241 tokens | **47%** | Tool filter eliminated 10 irrelevant schemas |
+| Repetitive chat (system prompt restated) | 1,019 tokens | 718 tokens | **30%** | Dedup removed 36 repeated system prompt sentences |
+| Code agent (large codebase context) | 2,542 tokens | 2,553 tokens | **0%** | Unique code; budget injection added 11 tokens |
+
+**Average reduction: 18.7%** across all scenarios. Results vary significantly by workload type.
+The tool-heavy scenario benefits most (47%); RAG and code contexts benefit least without
+sentence-level repetition.
+
+Additional benchmark metrics (full report in `benchmarks/results/report.md`):
+- **Latency overhead:** 0.18–2.27% (well under 5% target vs. 500ms API call)
+- **Tool recall:** 75% — 8/10 correct tools selected; keyword-based scorer misses 2 edge cases
+- **API accuracy (gpt-4o-mini):** 90% raw vs 80% compressed (−10% delta, 2 questions affected)
+- **Semantic preservation:** 0.67–1.00 cosine similarity (lower when dedup removes repeated blocks)
 
 ## Installation
 
