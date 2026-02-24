@@ -299,7 +299,7 @@ def _run_with_openai(api_key: str) -> Dict[str, Any]:
     )
 
     results = []
-    model = "gpt-4.1"
+    model = "gpt-5.2"
 
     for q in TEST_QUESTIONS:
         msgs = [
@@ -310,7 +310,7 @@ def _run_with_openai(api_key: str) -> Dict[str, Any]:
         try:
             raw_resp = raw_client.chat.completions.create(
                 model=model,
-                max_tokens=150,
+                max_completion_tokens=150,
                 messages=msgs,
             )
             raw_answer = raw_resp.choices[0].message.content or ""
@@ -322,7 +322,7 @@ def _run_with_openai(api_key: str) -> Dict[str, Any]:
         try:
             comp_resp = compressed_client.chat.completions.create(
                 model=model,
-                max_tokens=150,
+                max_completion_tokens=150,
                 messages=msgs,
             )
             comp_answer = comp_resp.choices[0].message.content or ""
