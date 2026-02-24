@@ -36,7 +36,7 @@ from contextprune.tokenizer import (
     count_system_tokens,
     count_tools_tokens,
 )
-from contextprune.dedup import SemanticDeduplicator
+from contextprune.dedup import MMRSelector, SemanticDeduplicator
 from contextprune.tool_filter import ToolSchemaFilter
 from contextprune.budget import TokenBudgetInjector
 
@@ -81,27 +81,82 @@ def truncate_to_budget(
     return truncated, system, tools
 
 
+def _get_query_signal(messages: List[Dict[str, Any]]) -> str:
+    """Extract the latest user message as the MMR query signal."""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                return content[:500]
+    return "What is the answer?"
+
+
+def _apply_mmr_to_pipeline(
+    system: Optional[str],
+    messages: List[Dict[str, Any]],
+    mmr: MMRSelector,
+    min_tokens: int = 500,
+) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+    """Apply MMR within-message selection to system + messages."""
+    query = _get_query_signal(messages)
+    new_system = system
+
+    if system and isinstance(system, str):
+        sys_tok = count_system_tokens(system)
+        if sys_tok > min_tokens:
+            new_system, _ = mmr.select(system, query)
+
+    new_messages = []
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str) and content.strip():
+            msg_tok = count_message_tokens([msg])
+            if msg_tok > min_tokens:
+                compressed, _ = mmr.select(content, query)
+                msg = dict(msg)
+                msg["content"] = compressed
+        new_messages.append(msg)
+
+    return new_system, new_messages
+
+
 def run_contextprune(
     system: str,
     messages: List[Dict[str, Any]],
     tools: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[Dict[str, Any]], Optional[str], Optional[List[Dict[str, Any]]], Dict[str, Any]]:
-    """Run ContextPrune's 3-layer pipeline and return compressed output + stats."""
+    """Run ContextPrune's full pipeline (MMR system + dedup + MMR msgs + tool filter + budget).
+
+    Order rationale: the system prompt is constant across turns so MMR runs on it
+    BEFORE cross-turn dedup (which would otherwise destroy its paragraph structure via
+    space-joining of sentence chunks). Within-message MMR on individual messages runs
+    AFTER dedup so already-deduped messages get a second pass.
+    """
     dedup = SemanticDeduplicator(similarity_threshold=0.85)
+    mmr = MMRSelector(token_budget_ratio=0.5, lambda_param=0.5, min_tokens_to_mmr=300)
     tool_filter = ToolSchemaFilter(max_tools=10)
     budget_injector = TokenBudgetInjector()
 
     orig_tokens = count_all(messages, system, tools)
+    query = _get_query_signal(messages)
 
-    # Layer 1: Semantic dedup
-    new_messages, new_system, _ = dedup.deduplicate(messages, system=system)
+    # Layer 1a: MMR on system prompt FIRST (preserves paragraph structure)
+    new_system = system
+    if system and isinstance(system, str) and count_system_tokens(system) > 300:
+        new_system, _ = mmr.select(system, query)
 
-    # Layer 2: Tool filtering
+    # Layer 1b: Cross-turn semantic dedup (on messages + already-compressed system)
+    new_messages, new_system, _ = dedup.deduplicate(messages, system=new_system)
+
+    # Layer 2: MMR on individual messages after dedup
+    _, new_messages = _apply_mmr_to_pipeline(None, new_messages, mmr, min_tokens=300)
+
+    # Layer 3: Tool filtering
     filtered_tools = tools
     if tools and len(tools) > 10:
         filtered_tools, _ = tool_filter.filter(tools, new_messages)
 
-    # Layer 3: Budget injection
+    # Layer 4: Budget injection
     new_system_budgeted, _ = budget_injector.inject(new_system, new_messages)
 
     comp_tokens = count_all(new_messages, new_system_budgeted, filtered_tools)
@@ -111,7 +166,42 @@ def run_contextprune(
         "original_tokens": orig_tokens,
         "compressed_tokens": comp_tokens,
         "reduction_pct": round(max(0.0, reduction), 1),
-        "method": "contextprune",
+        "method": "contextprune+mmr",
+    }
+    return new_messages, new_system_budgeted, filtered_tools, stats
+
+
+def run_contextprune_mmr_only(
+    system: str,
+    messages: List[Dict[str, Any]],
+    tools: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], Optional[str], Optional[List[Dict[str, Any]]], Dict[str, Any]]:
+    """Run ContextPrune with MMR only (no cross-turn dedup) — isolates MMR contribution."""
+    mmr = MMRSelector(token_budget_ratio=0.5, lambda_param=0.5, min_tokens_to_mmr=300)
+    tool_filter = ToolSchemaFilter(max_tools=10)
+    budget_injector = TokenBudgetInjector()
+
+    orig_tokens = count_all(messages, system, tools)
+
+    # MMR only (no cross-turn dedup)
+    new_system, new_messages = _apply_mmr_to_pipeline(system, messages, mmr, min_tokens=300)
+
+    # Tool filtering
+    filtered_tools = tools
+    if tools and len(tools) > 10:
+        filtered_tools, _ = tool_filter.filter(tools, new_messages)
+
+    # Budget injection
+    new_system_budgeted, _ = budget_injector.inject(new_system, new_messages)
+
+    comp_tokens = count_all(new_messages, new_system_budgeted, filtered_tools)
+    reduction = (orig_tokens - comp_tokens) / orig_tokens * 100 if orig_tokens else 0
+
+    stats = {
+        "original_tokens": orig_tokens,
+        "compressed_tokens": comp_tokens,
+        "reduction_pct": round(max(0.0, reduction), 1),
+        "method": "mmr_only",
     }
     return new_messages, new_system_budgeted, filtered_tools, stats
 
@@ -143,13 +233,13 @@ def fmt_cell(tokens: int, reduction_pct: Optional[float] = None) -> str:
 
 
 def print_comparison_table(rows: List[Dict[str, Any]]) -> None:
-    col_w = [22, 10, 14, 14, 14]
-    header = ["Scenario", "Raw", "Truncation", "LLMLingua-2", "ContextPrune"]
+    col_w = [22, 10, 14, 14, 18, 18]
+    header = ["Scenario", "Raw", "Truncation", "LLMLingua-2", "ContextPrune+MMR", "MMR Only"]
 
     sep = "-" * (sum(col_w) + len(col_w) * 3 + 1)
     header_row = (
         f" {header[0]:<{col_w[0]}} | {header[1]:<{col_w[1]}} | {header[2]:<{col_w[2]}} | "
-        f"{header[3]:<{col_w[3]}} | {header[4]:<{col_w[4]}}"
+        f"{header[3]:<{col_w[3]}} | {header[4]:<{col_w[4]}} | {header[5]:<{col_w[5]}}"
     )
 
     print()
@@ -163,26 +253,33 @@ def print_comparison_table(rows: List[Dict[str, Any]]) -> None:
     for r in rows:
         raw_cell = fmt_cell(r["raw_tokens"])
 
-        trunc_pct = r.get("trunc_pct")  # reduction_pct
+        trunc_pct = r.get("trunc_pct")
         trunc_cell = fmt_cell(r["trunc_tokens"], trunc_pct)
 
         ll2_tok = r.get("ll2_tokens")
-        ll2_pct = r.get("ll2_pct")  # reduction_pct
+        ll2_pct = r.get("ll2_pct")
         if ll2_tok is None:
             ll2_cell = "FAILED"
         else:
             ll2_cell = fmt_cell(ll2_tok, ll2_pct)
 
         cp_tok = r.get("cp_tokens")
-        cp_pct = r.get("cp_pct")  # reduction_pct
+        cp_pct = r.get("cp_pct")
         if cp_tok is None:
             cp_cell = "SKIPPED"
         else:
             cp_cell = fmt_cell(cp_tok, cp_pct)
 
+        mmr_tok = r.get("mmr_tokens")
+        mmr_pct = r.get("mmr_pct")
+        if mmr_tok is None:
+            mmr_cell = "SKIPPED"
+        else:
+            mmr_cell = fmt_cell(mmr_tok, mmr_pct)
+
         print(
             f" {r['scenario']:<{col_w[0]}} | {raw_cell:<{col_w[1]}} | {trunc_cell:<{col_w[2]}} | "
-            f"{ll2_cell:<{col_w[3]}} | {cp_cell:<{col_w[4]}}"
+            f"{ll2_cell:<{col_w[3]}} | {cp_cell:<{col_w[4]}} | {mmr_cell:<{col_w[5]}}"
         )
 
     print()
@@ -208,6 +305,7 @@ def run_comparison(
     n_runs: int = 5,
     skip_llmlingua: bool = False,
     skip_contextprune: bool = False,
+    skip_mmr: bool = False,
     verbose: bool = False,
 ) -> None:
     if verbose:
@@ -275,7 +373,7 @@ def run_comparison(
             (raw_tokens - trunc_tokens) / raw_tokens * 100, 1
         ) if raw_tokens else 0.0
 
-        # ----- ContextPrune -----
+        # ----- ContextPrune (dedup + MMR + tools + budget) -----
         cp_tokens: Optional[int] = None
         cp_pct: Optional[float] = None
 
@@ -287,6 +385,18 @@ def run_comparison(
             except Exception as e:
                 print(f"  ContextPrune failed on {name}: {e}")
 
+        # ----- MMR Only (no cross-turn dedup) -----
+        mmr_tokens: Optional[int] = None
+        mmr_pct: Optional[float] = None
+
+        if not skip_mmr and not skip_contextprune:
+            try:
+                _, _, _, mmr_stats = run_contextprune_mmr_only(system, messages, tools)
+                mmr_tokens = mmr_stats["compressed_tokens"]
+                mmr_pct = mmr_stats["reduction_pct"]
+            except Exception as e:
+                print(f"  MMR-only failed on {name}: {e}")
+
         table_rows.append({
             "scenario": name,
             "raw_tokens": raw_tokens,
@@ -296,6 +406,8 @@ def run_comparison(
             "ll2_pct": ll2_pct,
             "cp_tokens": cp_tokens,
             "cp_pct": cp_pct,
+            "mmr_tokens": mmr_tokens,
+            "mmr_pct": mmr_pct,
         })
 
     # ----- Latency measurement (first scenario only — representative) -----
@@ -331,13 +443,24 @@ def run_comparison(
         except Exception as e:
             print(f"  ContextPrune latency measurement failed: {e}")
 
+    # MMR-only latency
+    mmr_ms: Optional[float] = None
+    if not skip_mmr and not skip_contextprune:
+        try:
+            def _mmr():
+                run_contextprune_mmr_only(sys0, msgs0, tools0)
+            mmr_ms = median_ms(_mmr, n_runs)
+        except Exception as e:
+            print(f"  MMR-only latency measurement failed: {e}")
+
     # ----- Output -----
     print_comparison_table(table_rows)
 
     latencies = {
         "Truncation": trunc_ms,
         "LLMLingua-2": ll2_ms,
-        "ContextPrune": cp_ms,
+        "ContextPrune+MMR": cp_ms,
+        "MMR Only": mmr_ms,
     }
     print_latency_table(latencies, n_runs)
 
@@ -349,6 +472,8 @@ def run_comparison(
         print("Note: LLMLingua-2 was skipped (--skip-llmlingua)")
     if skip_contextprune:
         print("Note: ContextPrune was skipped (--skip-contextprune)")
+    if skip_mmr:
+        print("Note: MMR-only was skipped (--skip-mmr)")
 
 
 def main() -> None:
@@ -357,6 +482,7 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=5, help="Number of latency timing runs (default: 5)")
     parser.add_argument("--skip-llmlingua", action="store_true", help="Skip LLMLingua-2")
     parser.add_argument("--skip-contextprune", action="store_true", help="Skip ContextPrune")
+    parser.add_argument("--skip-mmr", action="store_true", help="Skip MMR-only condition")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
@@ -365,6 +491,7 @@ def main() -> None:
         n_runs=args.runs,
         skip_llmlingua=args.skip_llmlingua,
         skip_contextprune=args.skip_contextprune,
+        skip_mmr=args.skip_mmr,
         verbose=args.verbose,
     )
 

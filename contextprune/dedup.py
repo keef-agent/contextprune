@@ -6,6 +6,9 @@ get pruned, preserving earlier occurrences over later ones.
 
 Default model: nomic-ai/nomic-embed-text-v1.5 (2048-token context window,
 Apache 2.0 license). Falls back to all-MiniLM-L6-v2 (22MB, 256-token context).
+
+Also provides MMRSelector for within-message chunk selection using Maximum
+Marginal Relevance (Carbonell & Goldstein, SIGIR 1998).
 """
 
 from __future__ import annotations
@@ -245,3 +248,266 @@ class SemanticDeduplicator:
                 new_messages.append(msg)
 
         return new_messages, new_system, removed_count
+
+
+class MMRSelector:
+    """Maximum Marginal Relevance chunk selector for within-message compression.
+
+    Selects chunks that maximize relevance to the user query while minimizing
+    redundancy with already-selected chunks. Produces grammatically coherent
+    output by operating at the chunk level (not token level).
+
+    Reference: Carbonell & Goldstein (1998). The use of MMR, diversity-based
+    reranking for reordering documents and producing summaries. SIGIR.
+
+    Advantage over LLMLingua-2: query-aware, coherent output, no ML model
+    required beyond the embedding model already used for dedup.
+
+    Parameters
+    ----------
+    token_budget_ratio : float
+        Maximum fraction of tokens to *keep* (0–1). Default 0.5 keeps up to 50%
+        of tokens, but actual reduction is driven by measured redundancy — if the
+        content is not redundant the selector returns it unchanged.
+    lambda_param : float
+        MMR trade-off: 0 = pure diversity, 1 = pure relevance. Default 0.5.
+    model : str
+        HuggingFace embedding model name.
+    chunk_by : str
+        Splitting strategy: "paragraph" (default) | "sentence" | "chunk".
+        Paragraph mode avoids cutting mid-sentence.
+    min_chunk_tokens : int
+        Chunks shorter than this (estimated token count) are always kept and
+        excluded from MMR scoring. Default 30.
+    preserve_order : bool
+        If True (default), selected chunks are returned in their original
+        document order rather than MMR selection order.
+    redundancy_threshold : float
+        Mean pairwise similarity above which MMR is applied. If the average
+        chunk similarity is below this value the content is returned as-is
+        (not redundant enough to compress). Default 0.35.
+    min_tokens_to_mmr : int
+        Only run MMR when total token count exceeds this value. Default 300.
+    """
+
+    def __init__(
+        self,
+        token_budget_ratio: float = 0.5,
+        lambda_param: float = 0.5,
+        model: str = _DEFAULT_MODEL,
+        chunk_by: str = "paragraph",
+        min_chunk_tokens: int = 30,
+        preserve_order: bool = True,
+        redundancy_threshold: float = 0.35,
+        min_tokens_to_mmr: int = 300,
+    ) -> None:
+        if model == "minilm":
+            model = _FALLBACK_MODEL
+        self.token_budget_ratio = token_budget_ratio
+        self.lambda_param = lambda_param
+        self.model = model
+        self.chunk_by = chunk_by
+        self.min_chunk_tokens = min_chunk_tokens
+        self.preserve_order = preserve_order
+        self.redundancy_threshold = redundancy_threshold
+        self.min_tokens_to_mmr = min_tokens_to_mmr
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _split(self, content: str) -> List[str]:
+        """Split content, falling back to sentence if no paragraphs found."""
+        if self.chunk_by == "paragraph":
+            chunks = _split_chunks(content, "paragraph")
+            if len(chunks) <= 1:
+                # No paragraph breaks — fall back to sentences
+                chunks = _split_chunks(content, "sentence")
+            return chunks
+        return _split_chunks(content, self.chunk_by)
+
+    @staticmethod
+    def _count_tokens(chunks: List[str]) -> int:
+        return sum(_count_tokens_approx(c) for c in chunks)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def select(
+        self,
+        content: str,
+        query: str,
+        system: Optional[str] = None,  # noqa: ARG002 — reserved for future use
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Select chunks using MMR to maximise relevance + diversity.
+
+        Parameters
+        ----------
+        content : str
+            The message content to compress.
+        query : str
+            The user's current question / task (used as the MMR query signal).
+        system : str, optional
+            Unused; reserved for future system-prompt-aware compression.
+
+        Returns
+        -------
+        tuple[str, dict]
+            (compressed_content, stats) where stats contains:
+            - original_tokens  : int
+            - selected_tokens  : int
+            - reduction_pct    : float
+            - chunks_total     : int
+            - chunks_kept      : int
+            - mmr_scores       : list[(chunk_prefix, score, "kept"|"dropped")]
+        """
+        emb = _require_embeddings()
+
+        chunks = self._split(content)
+        if not chunks:
+            return content, self._passthrough_stats(content, 0, 0)
+
+        # Separate tiny chunks (always kept, not MMR'd) from eligible chunks
+        tiny: List[int] = []
+        eligible: List[int] = []
+        for i, c in enumerate(chunks):
+            if _count_tokens_approx(c) < self.min_chunk_tokens:
+                tiny.append(i)
+            else:
+                eligible.append(i)
+
+        total_tokens = self._count_tokens(chunks)
+        original_tokens = total_tokens
+
+        # If content is too short or no eligible chunks — pass through unchanged
+        if total_tokens < self.min_tokens_to_mmr or len(eligible) <= 1:
+            stats = self._passthrough_stats(content, original_tokens, len(chunks))
+            return content, stats
+
+        eligible_texts = [chunks[i] for i in eligible]
+
+        # Embed eligible chunks (document prefix) and query (query prefix)
+        chunk_embs = emb.embed(eligible_texts, self.model, prefix=_STORE_PREFIX)
+        query_embs = emb.embed([query], self.model, prefix=_QUERY_PREFIX)
+        query_vec = query_embs[0]  # shape (dim,)
+
+        # Check mean pairwise similarity to estimate redundancy
+        if len(eligible) >= 2:
+            # Fast batch pairwise: dot product of normalised vectors = cos sim
+            sim_matrix = chunk_embs @ chunk_embs.T  # (n, n)
+            # Upper triangle, excluding diagonal
+            n = len(eligible)
+            triu_vals = [sim_matrix[i, j] for i in range(n) for j in range(i + 1, n)]
+            mean_sim = float(np.mean(triu_vals)) if triu_vals else 0.0
+        else:
+            mean_sim = 0.0
+
+        # Not enough redundancy — return unchanged
+        if mean_sim < self.redundancy_threshold:
+            stats = self._passthrough_stats(content, original_tokens, len(chunks))
+            stats["mean_pairwise_similarity"] = round(mean_sim, 3)
+            stats["skipped_reason"] = "low_redundancy"
+            return content, stats
+
+        # Compute per-chunk relevance scores against query
+        relevance_scores = (chunk_embs @ query_vec).tolist()  # (n,)
+
+        # Determine token budget for eligible chunks
+        tiny_tokens = sum(_count_tokens_approx(chunks[i]) for i in tiny)
+        eligible_tokens_total = total_tokens - tiny_tokens
+        # Target: keep token_budget_ratio fraction of ELIGIBLE tokens
+        # But don't cut more than (1 - min cap) of eligible content
+        target_eligible_tokens = max(
+            int(eligible_tokens_total * self.token_budget_ratio),
+            self.min_chunk_tokens * 2,  # always keep at least ~2 chunks worth
+        )
+
+        # Greedy MMR selection
+        remaining = list(range(len(eligible)))  # indices into eligible_texts
+        selected: List[int] = []         # indices into eligible_texts
+        selected_tokens = 0
+        selected_embs: List[np.ndarray] = []
+
+        mmr_log: List[Tuple[str, float, str]] = []
+
+        while remaining and selected_tokens < target_eligible_tokens:
+            if not selected:
+                # First chunk: pick highest relevance
+                scores = [relevance_scores[i] for i in remaining]
+                best_local = int(np.argmax(scores))
+                best_idx = remaining[best_local]
+                mmr_score = relevance_scores[best_idx]
+            else:
+                # MMR score = λ * cos(chunk, query) - (1-λ) * max_cos(chunk, selected)
+                sel_matrix = np.vstack(selected_embs)  # (k, dim)
+                best_score = -float("inf")
+                best_idx = remaining[0]
+                for idx in remaining:
+                    rel = self.lambda_param * relevance_scores[idx]
+                    sims_to_selected = chunk_embs[idx] @ sel_matrix.T  # (k,)
+                    div = (1 - self.lambda_param) * float(sims_to_selected.max())
+                    score = rel - div
+                    if score > best_score:
+                        best_score = score
+                        best_idx = idx
+                mmr_score = best_score
+
+            chunk_tok = _count_tokens_approx(eligible_texts[best_idx])
+            selected.append(best_idx)
+            selected_tokens += chunk_tok
+            selected_embs.append(chunk_embs[best_idx])
+            remaining.remove(best_idx)
+            mmr_log.append((eligible_texts[best_idx][:50], round(mmr_score, 4), "kept"))
+
+        # Mark dropped chunks
+        selected_set = set(selected)
+        for idx in range(len(eligible)):
+            if idx not in selected_set:
+                mmr_log.append(
+                    (eligible_texts[idx][:50], 0.0, "dropped")
+                )
+
+        # Reconstruct: tiny chunks always included; eligible only if selected
+        if self.preserve_order:
+            kept_original_indices = set(tiny) | {eligible[i] for i in selected}
+            kept_chunks = [c for i, c in enumerate(chunks) if i in kept_original_indices]
+        else:
+            # Return in MMR selection order (tiny first, then selected in MMR order)
+            kept_chunks = [chunks[i] for i in tiny] + [eligible_texts[i] for i in selected]
+
+        # Join — use paragraph separator if chunk_by == paragraph, else space
+        sep = "\n\n" if self.chunk_by == "paragraph" else " "
+        compressed = sep.join(kept_chunks)
+
+        selected_total_tokens = tiny_tokens + selected_tokens
+        reduction_pct = round(
+            max(0.0, (original_tokens - selected_total_tokens) / original_tokens * 100), 1
+        )
+
+        stats: Dict[str, Any] = {
+            "original_tokens": original_tokens,
+            "selected_tokens": selected_total_tokens,
+            "reduction_pct": reduction_pct,
+            "chunks_total": len(chunks),
+            "chunks_kept": len(kept_chunks),
+            "mmr_scores": mmr_log,
+            "mean_pairwise_similarity": round(mean_sim, 3),
+        }
+        return compressed, stats
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _passthrough_stats(content: str, original_tokens: int, chunks_total: int) -> Dict[str, Any]:
+        tok = original_tokens or _count_tokens_approx(content)
+        return {
+            "original_tokens": tok,
+            "selected_tokens": tok,
+            "reduction_pct": 0.0,
+            "chunks_total": chunks_total,
+            "chunks_kept": chunks_total,
+            "mmr_scores": [],
+        }

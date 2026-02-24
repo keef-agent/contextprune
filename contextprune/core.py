@@ -6,7 +6,7 @@ import dataclasses
 from typing import Any, Dict, List, Optional, Union
 
 from .budget import TokenBudgetInjector
-from .dedup import SemanticDeduplicator
+from .dedup import MMRSelector, SemanticDeduplicator
 from .stats import CompressionStats, StatsTimer
 from .tokenizer import count_message_tokens, count_system_tokens, count_tools_tokens
 from .tool_filter import ToolSchemaFilter
@@ -19,11 +19,15 @@ class Config:
     semantic_dedup: bool = True
     tool_filter: bool = True
     budget_injection: bool = True
+    use_mmr: bool = True
     max_tools: int = 10
     similarity_threshold: float = 0.82
     min_chunk_tokens: int = 5
     dedup_model: str = "nomic-ai/nomic-embed-text-v1.5"
     tool_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    mmr_token_budget_ratio: float = 0.5
+    mmr_lambda: float = 0.5
+    mmr_min_tokens: int = 500
     verbose: bool = False
 
 
@@ -44,6 +48,58 @@ def _extract_system_str(
     return None
 
 
+def _get_query_signal(messages: List[Dict[str, Any]]) -> str:
+    """Extract the latest user message as the MMR query signal."""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                return content[:500]  # trim very long queries
+    return "What is the answer?"  # safe fallback
+
+
+def _apply_mmr(
+    kwargs: Dict[str, Any],
+    mmr: "MMRSelector",
+    min_tokens: int = 500,
+) -> Dict[str, Any]:
+    """Apply MMR within-message selection to all long messages and the system prompt.
+
+    Finds the user's latest message as the query signal, then applies MMR to
+    any message or system prompt that exceeds *min_tokens* estimated tokens.
+    Short content is passed through unchanged.
+    """
+    from .tokenizer import count_message_tokens, count_system_tokens
+
+    messages = kwargs.get("messages", [])
+    system = kwargs.get("system", None)
+
+    # Query signal = latest user message
+    query = _get_query_signal(messages)
+
+    # Compress the system prompt (often the largest block)
+    if system and isinstance(system, str):
+        sys_tok = count_system_tokens(system)
+        if sys_tok > min_tokens:
+            compressed_sys, _ = mmr.select(system, query)
+            kwargs["system"] = compressed_sys
+
+    # Compress individual messages
+    new_messages = []
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str) and content.strip():
+            msg_tok = count_message_tokens([msg])
+            if msg_tok > min_tokens:
+                compressed, _ = mmr.select(content, query)
+                msg = dict(msg)
+                msg["content"] = compressed
+        new_messages.append(msg)
+    kwargs["messages"] = new_messages
+
+    return kwargs
+
+
 class _CompressedMessages:
     """Proxy for the messages namespace that runs compression."""
 
@@ -54,6 +110,12 @@ class _CompressedMessages:
             similarity_threshold=config.similarity_threshold,
             model=config.dedup_model,
             min_chunk_tokens=config.min_chunk_tokens,
+        )
+        self._mmr = MMRSelector(
+            token_budget_ratio=config.mmr_token_budget_ratio,
+            lambda_param=config.mmr_lambda,
+            model=config.dedup_model,
+            min_tokens_to_mmr=config.mmr_min_tokens,
         )
         self._tool_filter = ToolSchemaFilter(
             max_tools=config.max_tools,
@@ -78,9 +140,18 @@ class _CompressedMessages:
                 + count_tools_tokens(tools)
             )
 
-            # 1. Semantic deduplication
+            # 1a. MMR on system prompt FIRST (before dedup, to preserve paragraph structure)
+            if self._config.use_mmr and system is not None and isinstance(system, str):
+                query_sig = _get_query_signal(messages)
+                sys_tok = count_system_tokens(system)
+                if sys_tok > self._config.mmr_min_tokens:
+                    compressed_sys, _ = self._mmr.select(system, query_sig)
+                    kwargs["system"] = compressed_sys
+                    system = compressed_sys  # use compressed version for dedup
+
+            # 1b. Semantic deduplication (cross-turn)
             if self._config.semantic_dedup and messages:
-                system_str = _extract_system_str(system)
+                system_str = _extract_system_str(kwargs.get("system", system))
                 new_messages, new_system_str, removed = self._dedup.deduplicate(
                     messages, system=system_str
                 )
@@ -91,7 +162,24 @@ class _CompressedMessages:
                 if system is not None and isinstance(system, str) and new_system_str:
                     kwargs["system"] = new_system_str
 
-            # 2. Tool schema filtering
+            # 2. Within-message MMR on individual messages (after dedup)
+            if self._config.use_mmr:
+                # Only compress messages (system already handled in step 1a)
+                cur_msgs = kwargs.get("messages", messages)
+                query_sig = _get_query_signal(cur_msgs)
+                new_msgs = []
+                for msg in cur_msgs:
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and content.strip():
+                        msg_tok = count_message_tokens([msg])
+                        if msg_tok > self._config.mmr_min_tokens:
+                            compressed, _ = self._mmr.select(content, query_sig)
+                            msg = dict(msg)
+                            msg["content"] = compressed
+                    new_msgs.append(msg)
+                kwargs["messages"] = new_msgs
+
+            # 3. Tool schema filtering
             if self._config.tool_filter and tools and len(tools) > self._config.max_tools:
                 filtered_tools, removed = self._tool_filter.filter(
                     tools, kwargs.get("messages", messages)
@@ -99,7 +187,7 @@ class _CompressedMessages:
                 kwargs["tools"] = filtered_tools
                 stats.tools_removed = removed
 
-            # 3. Token budget injection
+            # 4. Token budget injection
             if self._config.budget_injection:
                 current_system = kwargs.get("system", system)
                 new_system, injected = self._budget.inject(
@@ -202,6 +290,12 @@ class _CompressedChatCompletions:
             model=config.dedup_model,
             min_chunk_tokens=config.min_chunk_tokens,
         )
+        self._mmr = MMRSelector(
+            token_budget_ratio=config.mmr_token_budget_ratio,
+            lambda_param=config.mmr_lambda,
+            model=config.dedup_model,
+            min_tokens_to_mmr=config.mmr_min_tokens,
+        )
         self._tool_filter = ToolSchemaFilter(
             max_tools=config.max_tools,
             model=config.tool_model,
@@ -248,6 +342,29 @@ class _CompressedChatCompletions:
                     rebuilt.extend(system_msgs)
                 rebuilt.extend(new_msgs)
                 kwargs["messages"] = rebuilt
+
+            # 1b. Within-message MMR selection
+            if self._config.use_mmr:
+                # For OpenAI format, system is embedded in the messages list
+                # Temporarily extract system to apply MMR separately
+                cur_msgs = kwargs.get("messages", messages)
+                sys_part = [m for m in cur_msgs if m.get("role") == "system"]
+                non_sys_part = [m for m in cur_msgs if m.get("role") != "system"]
+
+                temp_kwargs: Dict[str, Any] = {
+                    "messages": non_sys_part,
+                    "system": sys_part[0].get("content", "") if sys_part else None,
+                }
+                temp_kwargs = _apply_mmr(
+                    temp_kwargs, self._mmr, min_tokens=self._config.mmr_min_tokens
+                )
+                # Reassemble
+                rebuilt2: List[Dict[str, Any]] = []
+                if sys_part:
+                    sys_content = temp_kwargs.get("system") or sys_part[0].get("content", "")
+                    rebuilt2.append({"role": "system", "content": sys_content})
+                rebuilt2.extend(temp_kwargs.get("messages", non_sys_part))
+                kwargs["messages"] = rebuilt2
 
             # 2. Tool filtering (OpenAI format)
             if self._config.tool_filter and tools and len(tools) > self._config.max_tools:
