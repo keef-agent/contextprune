@@ -1,0 +1,9 @@
+{
+  "livecodebench": {
+    "dataset": "livecodebench",
+    "n_items": 200,
+    "avg_tokens": 367.6,
+    "source_url": "https://huggingface.co/datasets/livecodebench/code_generation_lite",
+    "cutoff_date": "2024-07-01"
+  }
+}

@@ -34,7 +34,15 @@ dependencies = [
 [project.optional-dependencies]
 openai = ["openai>=1.0.0"]
 baselines = ["llmlingua>=0.2.0"]
-research = ["llmlingua>=0.2.0", "sentence-transformers>=3.0.0", "datasets>=2.0.0"]
+research = [
+    "datasets>=2.0.0",
+    "huggingface_hub>=0.20.0",
+    "tqdm>=4.0.0",
+    "scipy>=1.10.0",
+    "llmlingua>=0.2.0",
+    "sentence-transformers>=3.0.0",
+    "pandas>=1.5.0",
+]
 dev = ["pytest", "pytest-cov"]
 
 [tool.pytest.ini_options]
