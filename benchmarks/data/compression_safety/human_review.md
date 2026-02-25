@@ -1,6 +1,6 @@
 # Sentence Review — Human Spot-Check
 
-*Generated from 55 annotated conversations*
+*Generated from 100 annotated conversations*
 *25 random sentence-level decisions sampled for review*
 
 **Instructions:** For each decision below, mark whether you agree with the label.
@@ -8,175 +8,175 @@ After review, % agree = human validation accuracy.
 
 ---
 
-### [01] Conv: `MaDgFcV_7` | SCR: 40%
-**[16] REDUNDANT** — "post-convergence events"
-> Despite their differences, the two boys began to bond over their shared experiences as the children of superheroes.
+### [01] Conv: `cCOWA5p_15` | SCR: 92%
+**[8] REDUNDANT** — "SVG tool step"
+> Use the "Select" and "Path" tools in the toolbar to create the desired shape for the icon.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [02] Conv: `ElEI4w5_0` | SCR: 100%
-**[13] REDUNDANT** — "cycle solution detail"
-> Therefore, the net work for the cycle is:
+### [02] Conv: `10HCuwl_0` | SCR: 60%
+**[14] ESSENTIAL** — "defines Refund_Request__c usage"
+> Assistant: Here's an example of Apex classes that include custom logic to handle refunds in a Salesforce system:
+```java
+// RefundRequestController.cls - Apex class to handle refund request logic
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [03] Conv: `jK7r4qx_0` | SCR: 60%
-**[24] UNCERTAIN** — "possible key compliance item"
-> This Project falls under The Commonwealth of Pennsylvania enacted Act 127 of 2012, known as the Public Works Employment Verification Act (‘the Act’) which requires all public work contractors and subcontractors to utilize the Federal Government’s E-Verify system to ensure that all employees perfo...
+### [03] Conv: `yKiw2Ca_16` | SCR: 0%
+**[0] ESSENTIAL** — "source text verbs"
+> User: Please extract keywords from this: Part Two 
+So this is heaven, he thought, and he had to smile at himself.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [04] Conv: `2g14l5x_5` | SCR: 8%
-**[11] ESSENTIAL** — "emotional state detail"
-> Alli was grateful for the offer.
+### [04] Conv: `qPPWNo5_0` | SCR: 60%
+**[0] REDUNDANT** — "earlier continue prompt"
+> User: Continue writing please
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [05] Conv: `fNEJcGi_11` | SCR: 52%
-**[22] REDUNDANT** — "extra specific point"
-> In particular, the second debater's point about the collective nature of happiness and the importance of creating a more just and compassionate society was particularly persuasive.
+### [05] Conv: `zjs7HNS_0` | SCR: 44%
+**[7] ESSENTIAL** — "skip-limit behavior detail"
+> The `skip()` method is then used to skip the first `skipCount` documents, and the `limit()` method is used to limit the number of documents returned to `pageSize`.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [06] Conv: `EKVf2RL_0` | SCR: 92%
-**[8] REDUNDANT** — "pop-after-push test"
-> TEST(QueueTests, TestPopAfterPush) {
-    queue q;
-    q.push(5);
-    q.push(10);
-    q.pop();
-    EXPECT_EQ(q.pop(), 10);
-    EXPECT_FALSE(q.pop());
-}
+### [06] Conv: `FHjcOUJ_7` | SCR: 64%
+**[15] ESSENTIAL** — "LaTeX document context"
+> User: you may use latex
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [07] Conv: `iXr3Rc6_15` | SCR: 36%
-**[9] ESSENTIAL** — "sets sample window"
-> # set the data start and stop points
-    scope.write("DATA:START 1")
-    scope.write("DATA:STOP 1000")
+### [07] Conv: `sPmyhRn_16` | SCR: 92%
+**[22] REDUNDANT** — "answer preface"
+> Assistant: To calculate the overall correlation coefficient between Cyanobacteria\_RT and Cyanobacteria\_microscope across all the provided dates, we'll use Pearson's correlation coefficient.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [08] Conv: `izuEpAx_0` | SCR: 80%
+### [08] Conv: `J7GNwNh_0` | SCR: 80%
+**[6] REDUNDANT** — "wrong technology topic"
+> Assistant: "The Rise of Vacuum Tube Technology: A Self-Help Guide for DIY Electrical Engineers"
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [09] Conv: `flpSFLe_4` | SCR: 44%
+**[12] ESSENTIAL** — "scene 7 description"
+> Scene 7 (10 seconds): Funny or interesting review expanded to fill screen.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [10] Conv: `pF3R6Vd_17` | SCR: 64%
+**[6] REDUNDANT** — "intro to example only"
+> Here's an example of how to create a data access layer using the Data Mapper pattern in Python:
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [11] Conv: `pF3R6Vd_17` | SCR: 64%
+**[18] REDUNDANT** — "explains query only"
+> The `find_all` method returns a list of all `User` objects in the database.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [12] Conv: `inuIr9J_103` | SCR: 92%
+**[8] REDUNDANT** — "movie-specific example"
+> The intricate plot twists and suspenseful sequences keep you on the edge of your seat.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [13] Conv: `MJSl6B1_97` | SCR: 20%
+**[22] ESSENTIAL** — "Quests method stub"
+> def update_quest(self, quest_id, name, category, date, repeat, xp):
+        # code to update an existing quest
+        pass
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [14] Conv: `I5TNcIH_0` | SCR: 96%
+**[10] REDUNDANT** — "DI availability note"
+> The DI container is already included in .NET Core and is ready to use.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [15] Conv: `xHeSmKi_0` | SCR: 56%
+**[8] ESSENTIAL** — "establishes slides 8 scope"
+> HTML Media Elements
+* Explanation of media elements in HTML
+* Examples of media elements (`<audio>`, `<video>`, `<source>`, `<track>`)
+9.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [16] Conv: `WdCTT4t_0` | SCR: 80%
+**[13] REDUNDANT** — "catalog creation helper"
+> # Step 2: Create a product catalog
+def create_product_catalog(business_id, access_token):
+    url = f'https://graph.facebook.com/v13.0/{business_id}/owned_product_catalogs'
+    payload = {
+        'access_token': access_token,
+        'name': 'Advantage+ Catalog'
+    }
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [17] Conv: `xHeSmKi_0` | SCR: 56%
+**[19] REDUNDANT** — "answer content to continue"
+> Media Elements
+* Explanation of the use of media elements (`<audio>`, `<video>`, `<source>`, `<track>`) in HTML
+* Examples of how to add audio and video content to a webpage and use attributes such as `src` and `controls`
+20.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [18] Conv: `WdCTT4t_0` | SCR: 80%
+**[8] REDUNDANT** — "code intro"
+> Here's a Python script that performs these tasks using the `requests` library.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [19] Conv: `rN2ow9R_0` | SCR: 28%
+**[15] REDUNDANT** — "compensation details"
+> A variety of factors are considered when determining someone’s compensation–including a candidate’s professional background, experience, and location.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [20] Conv: `fNEJcGi_11` | SCR: 52%
+**[7] REDUNDANT** — "restates previous"
+> In fact, helping others can often lead to our own happiness.
+
+Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
+
+### [21] Conv: `izuEpAx_0` | SCR: 80%
 **[15] REDUNDANT** — "five-word sentiment answer"
 > Assistant: Positive and solution-oriented approach.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [09] Conv: `MJSl6B1_97` | SCR: 20%
-**[10] REDUNDANT** — "generic closing"
-> Please let me know if you have any other question or if there's anything else I can help you with.
+### [22] Conv: `I5TNcIH_0` | SCR: 96%
+**[13] REDUNDANT** — "RealProxy background"
+> RealProxy is a part of the runtime infrastructure and is used by the Remoting and Web Services frameworks.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [10] Conv: `EKVf2RL_0` | SCR: 92%
-**[19] REDUNDANT** — "acknowledgement only"
-> Assistant: Ah, I see.
+### [23] Conv: `HkYPK4O_17` | SCR: 12%
+**[24] REDUNDANT** — "gradio code start"
+> However, I can provide you with the code to create the Gradio app using the code given above:
+```less
+import gradio as gr
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [11] Conv: `jK7r4qx_0` | SCR: 60%
-**[21] REDUNDANT** — "section header"
-> Statutory Requirements.
+### [24] Conv: `2x5IpnY_27` | SCR: 64%
+**[24] REDUNDANT** — "answer text not needed as context"
+> The first set of measurements has higher values of LAI than the second set, indicating that the first set of plants may have more leaves per unit area or more actively photosynthesizing leaves.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
-### [12] Conv: `skRMNld_0` | SCR: 96%
-**[5] REDUNDANT** — "parse step detail"
-> Start with the sentence symbol S.
-2.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [13] Conv: `oQ5niE8_0` | SCR: 84%
-**[24] ESSENTIAL** — "histogram plotting line"
-> # Create a histogram of the grades
-plt.hist(df['Grade'], bins=np.linspace(0, 100, 11))
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [14] Conv: `2CKVlKw_88` | SCR: 88%
-**[6] ESSENTIAL** — "mentions red flags concept"
-> One of the red flags to look out for is a lack of references.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [15] Conv: `isIKlT6_0` | SCR: 20%
-**[7] ESSENTIAL** — "tech stack and sprint constraints"
-> This would allow the system to scale horizontally and handle a large number of requests from users.
-web services
-GraphQL API for hotels search functionality
-Rest api for users and gateway
-API testing:mulesoft
-machine learning microservice :tensorflow java
-devops
-CI/CD:
-code :github
-build:maven
-pa...
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [16] Conv: `wrN9uUo_89` | SCR: 8%
-**[8] ESSENTIAL** — "chapter content"
-> The employees who found it were surprised to learn that the museum had owned the mirror for many years, and yet it had never been put on display. "It's not really art, is it?" one of the employees remarked. "It's just a mirror." But even though it was not considered art, the mirror seemed to draw...
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [17] Conv: `isIKlT6_0` | SCR: 20%
-**[21] ESSENTIAL** — "frontend stack"
-> The front-end will be developed using Angular and Bootstrap.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [18] Conv: `J7GNwNh_0` | SCR: 80%
-**[8] REDUNDANT** — "vacuum tube filler"
-> This technology was known as vacuum tube technology, and it was a game-changer for the field of electrical engineering.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [19] Conv: `jF2DAD3_29` | SCR: 74%
-**[3] REDUNDANT** — "examples of abilities"
-> For example, the Queen could be used to destroy a group of obstacles, the Bishop could be used to clear a path through obstacles, and the Knight could be used to defeat enemies.
-3.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [20] Conv: `Q17BLwm_5` | SCR: 96%
-**[22] REDUNDANT** — "impact opportunity summary"
-> In summary, the impact failure mode presents a significant research and commercial opportunity for the development of AM lattice structures that can withstand impact loading and provide bespoke impact properties for specific applications.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [21] Conv: `ElEI4w5_0` | SCR: 100%
-**[22] REDUNDANT** — "prior correction thread"
-> Q23 = P3V3(ln(V3/V2)) = 140 kPa x 0.103 m^3 x ln(0.103/0.028) = 18.78 kJ.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [22] Conv: `pJ2iZTe_17` | SCR: 100%
-**[6] REDUNDANT** — "cmdlet explanation"
-> The `Get-WmiObject` cmdlet is used to retrieve information about the CPU usage and memory.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [23] Conv: `zjs7HNS_0` | SCR: 44%
-**[4] ESSENTIAL** — "skip calculation detail"
-> skipCount = pageSize * (pageNumber - 1)
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [24] Conv: `2CKVlKw_88` | SCR: 88%
-**[23] REDUNDANT** — "draft risk detail"
-> Hiring an unlicensed or uninsured builder can lead to significant legal and financial risks.
-
-Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
-
-### [25] Conv: `2CKVlKw_88` | SCR: 88%
-**[7] REDUNDANT** — "draft content detail"
-> A reputable builder should be able to provide you with a list of references of their past clients whom you can contact to verify their work.
+### [25] Conv: `KOczjDP_24` | SCR: 32%
+**[23] ESSENTIAL** — "check fine print guidance"
+> Always check the fine print on time extensions and the contractor’s rights and obligations relating to those time extensions.
 
 Agree? [ ] Yes &nbsp;&nbsp; [ ] No — if no, correct label: `_______________`
 
