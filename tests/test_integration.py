@@ -272,7 +272,8 @@ class TestFullPipeline:
         assert stats.budget_injected is True
 
         call_kwargs = client.messages.create.call_args[1]
-        assert "[Token Budget:" in call_kwargs["system"]
+        # TALE classifier injects natural-language budget instruction (not old [Token Budget:] format)
+        assert any(phrase in call_kwargs["system"] for phrase in ["Target:", "targeting approximately", "tokens or fewer"])
 
     def test_messages_remain_valid(self):
         """After compression, messages should still have valid structure."""
