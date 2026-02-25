@@ -17,15 +17,15 @@ Live working document. Updated as findings come in. Use this when drafting secti
 - **Why ShareGPT**: largest publicly available real human-AI conversation dataset. Covers diverse domains. GPT-generated responses reflect real production LLM outputs.
 - **Why 100 conversations**: at observed std=0.30, n=100 gives 95% CI ±5.9% on mean SCR. Sufficient for section-level statistical claims.
 
-### Preliminary results (n=55, as of 2026-02-24)
+### Preliminary results (n=85, as of 2026-02-24)
 
 | Metric | Value |
 |--------|-------|
-| n | 55 |
-| Mean SCR | 60.6% |
-| Median SCR | 68.0% |
-| Std | 30.0% |
-| 95% CI on mean | ±7.9% |
+| n | 85 |
+| Mean SCR | 64.3% |
+| Median SCR | 72.0% |
+| Std | 30.5% |
+| 95% CI on mean | ±6.5% |
 | Min | 0.0% (exercise instructions, RPG game rules) |
 | Max | 100.0% (3 conversations: socket API, scientific review, thermodynamics) |
 
@@ -125,8 +125,8 @@ Live working document. Updated as findings come in. Use this when drafting secti
 
 | Metric | Value | Source | Date |
 |--------|-------|--------|------|
-| Mean SCR (preliminary) | 60.6% ± 7.9% | n=55 manual annotations | 2026-02-24 |
-| Median SCR | 68.0% | n=55 | 2026-02-24 |
+| Mean SCR (preliminary) | 60.6% ± 7.9% | n=85 manual annotations | 2026-02-24 |
+| Median SCR | 72.0% | n=85 | 2026-02-24 |
 | IAA κ | TBD | Claude Sonnet 4.6 re-annotation | pending |
 | Answer preservation rate | TBD | Functional test | pending |
 | MMLU-Pro accuracy (raw) | TBD | Exp 3 | pending |
@@ -146,4 +146,4 @@ Live working document. Updated as findings come in. Use this when drafting secti
 
 ---
 
-*Last updated: 2026-02-24 | n=55 annotations*
+*Last updated: 2026-02-24 | n=85 annotations*
