@@ -190,10 +190,12 @@ class _CompressedMessages:
             # 4. Token budget injection
             if self._config.budget_injection:
                 current_system = kwargs.get("system", system)
-                new_system, injected = self._budget.inject(
-                    current_system, kwargs.get("messages", messages)
+                new_system, budget_stats = self._budget.inject(
+                    kwargs.get("messages", messages),
+                    current_system,
+                    kwargs.get("tools", tools),
                 )
-                if injected:
+                if budget_stats["injected"]:
                     kwargs["system"] = new_system
                     stats.budget_injected = True
 
@@ -391,15 +393,22 @@ class _CompressedChatCompletions:
             if self._config.budget_injection:
                 current_msgs = kwargs.get("messages", messages)
                 sys_msgs = [m for m in current_msgs if m.get("role") == "system"]
-                if sys_msgs:
-                    sys_content = sys_msgs[0].get("content", "")
-                    non_sys = [m for m in current_msgs if m.get("role") != "system"]
-                    new_sys, injected = self._budget.inject(sys_content, non_sys)
-                    if injected:
+                non_sys = [m for m in current_msgs if m.get("role") != "system"]
+                sys_content = sys_msgs[0].get("content", "") if sys_msgs else None
+                new_sys, budget_stats = self._budget.inject(
+                    non_sys,
+                    sys_content,
+                    kwargs.get("tools", tools),
+                )
+                if budget_stats["injected"]:
+                    if sys_msgs:
                         rebuilt = [{"role": "system", "content": new_sys}]
                         rebuilt.extend(non_sys)
-                        kwargs["messages"] = rebuilt
-                        stats.budget_injected = True
+                    else:
+                        rebuilt = [{"role": "system", "content": new_sys}]
+                        rebuilt.extend(current_msgs)
+                    kwargs["messages"] = rebuilt
+                    stats.budget_injected = True
 
             # Count compressed tokens
             stats.compressed_tokens = count_message_tokens(
