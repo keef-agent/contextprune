@@ -39,6 +39,7 @@ research = [
     "huggingface_hub>=0.20.0",
     "tqdm>=4.0.0",
     "scipy>=1.10.0",
+    "sympy>=1.12",
     "llmlingua>=0.2.0",
     "sentence-transformers>=3.0.0",
     "pandas>=1.5.0",
