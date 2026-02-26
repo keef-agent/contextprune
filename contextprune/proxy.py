@@ -116,7 +116,7 @@ async def root() -> JSONResponse:
     return JSONResponse({
         "status": "ok",
         "version": "0.1.0",
-        "endpoints": ["/v1/messages", "/v1/chat/completions"],
+        "endpoints": ["/v1/messages", "/v1/chat/completions", "/v1/responses"],
     })
 
 
@@ -338,6 +338,152 @@ async def proxy_chat_completions(request: Request) -> Response:
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{target_base}/v1/chat/completions",
+                headers=headers,
+                json=modified_body,
+            )
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+            media_type=resp.headers.get("content-type", "application/json"),
+        )
+    except Exception as exc:
+        log.error("Upstream request failed: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+# --------------------------------------------------------------------------- #
+# Route: POST /v1/responses  (OpenAI Responses API / Codex OAuth)              #
+# --------------------------------------------------------------------------- #
+
+@app.post("/v1/responses")
+async def proxy_responses(request: Request) -> Response:
+    """Proxy for the OpenAI Responses API (used by Agents SDK, Codex CLI, OpenClaw openai-codex).
+
+    The Responses API differs from chat/completions:
+      - Request uses ``input`` array instead of ``messages``
+      - System prompt is a top-level ``instructions`` field
+      - Response has ``output`` array instead of ``choices``
+
+    ContextPrune deduplicates the ``input`` items (same role/content structure as messages)
+    and updates ``instructions`` with the deduplicated system text before forwarding.
+    """
+    global _request_counter
+    _request_counter += 1
+    q = _request_counter
+
+    raw_body = await request.body()
+    try:
+        body = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    # ---- Dry-run mode ----------------------------------------------------- #
+    is_dry_run = body.pop("__contextprune_dry_run", False)
+
+    model = body.get("model", "unknown")
+    is_stream = body.get("stream", False)
+
+    # ---- Determine target URL --------------------------------------------- #
+    target_base = _openai_target.rstrip("/")
+
+    # ---- Skip dedup for streaming (pass through unchanged) ---------------- #
+    if is_stream and not is_dry_run:
+        headers = dict(request.headers)
+        headers.pop("host", None)
+        async with httpx.AsyncClient(timeout=120) as client:
+            upstream = client.stream(
+                "POST",
+                f"{target_base}/v1/responses",
+                headers=headers,
+                content=raw_body,
+            )
+            async with upstream as resp:
+                return StreamingResponse(
+                    resp.aiter_bytes(),
+                    status_code=resp.status_code,
+                    headers=dict(resp.headers),
+                    media_type=resp.headers.get("content-type", "text/event-stream"),
+                )
+
+    # ---- Extract input and instructions ------------------------------------ #
+    # ``input`` items use the same {role, content} structure as messages.
+    # Input items may also be plain strings; wrap those as user messages for dedup.
+    raw_input: List[Any] = body.get("input", [])
+    messages: List[Dict[str, Any]] = []
+    for item in raw_input:
+        if isinstance(item, str):
+            messages.append({"role": "user", "content": item})
+        elif isinstance(item, dict):
+            messages.append(item)
+        # else: skip unexpected types
+
+    # ``instructions`` is the system prompt field in the Responses API
+    system: Optional[str] = body.get("instructions") or None
+    if isinstance(system, str) and not system.strip():
+        system = None
+
+    # ---- Deduplication ---------------------------------------------------- #
+    new_messages, new_system, orig_tok, comp_tok, removed, ratio = _run_dedup(messages, system)
+    saved = orig_tok - comp_tok
+
+    # Reconstruct input array preserving original string items where possible
+    new_input: List[Any] = []
+    for i, item in enumerate(raw_input):
+        if i < len(new_messages):
+            # If original was a plain string and content hasn't changed, keep as string
+            if isinstance(item, str) and new_messages[i].get("content") == item:
+                new_input.append(item)
+            else:
+                new_input.append(new_messages[i])
+        # Items beyond new_messages length were removed by dedup — skip them
+
+    # Stdout log
+    print(
+        f"[ContextPrune/Responses] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
+        flush=True,
+    )
+
+    # File log
+    stat_record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "model": model,
+        "endpoint": "responses",
+        "original_tokens": orig_tok,
+        "compressed_tokens": comp_tok,
+        "ratio": round(ratio, 4),
+        "sentences_removed": removed,
+    }
+    _write_stat(stat_record)
+
+    # ---- Dry-run: return stats only --------------------------------------- #
+    if is_dry_run:
+        return JSONResponse({
+            "contextprune": {
+                "original_tokens": orig_tok,
+                "compressed_tokens": comp_tok,
+                "ratio": round(ratio, 4),
+                "sentences_removed": removed,
+            }
+        })
+
+    # ---- Build modified body ---------------------------------------------- #
+    modified_body = dict(body)
+    modified_body["input"] = new_input
+    if new_system is not None:
+        modified_body["instructions"] = new_system
+    elif "instructions" in modified_body and system is None:
+        pass  # preserve original (empty/missing) instructions as-is
+
+    # ---- Forward to OpenAI Responses API ---------------------------------- #
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    headers.pop("content-length", None)
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{target_base}/v1/responses",
                 headers=headers,
                 json=modified_body,
             )

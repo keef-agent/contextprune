@@ -17,6 +17,19 @@ Your OAuth Bearer token passes through to Anthropic unchanged. ContextPrune only
 
 **Why this matters:** Claude.ai subscription has usage limits (messages per day/hour). With 40%+ fewer tokens per request, you'll hit those limits significantly less often.
 
+### OpenAI OAuth (Codex subscription)
+
+If you use the OpenAI Responses API with an OAuth Bearer token (e.g. OpenClaw's openai-codex provider, or Codex CLI in API key mode):
+
+```bash
+contextprune serve --port 8899
+export OPENAI_BASE_URL=http://localhost:8899
+```
+
+Your Bearer token passes through to api.openai.com unchanged. ContextPrune deduplicates the `input` array and `instructions` field before forwarding.
+
+**Why this matters:** The Responses API is used by the OpenAI Agents SDK, Codex CLI, and any framework routing through `openai-codex`. With long agentic sessions, context repetition compounds quickly — ContextPrune removes it before it reaches the model.
+
 ### OpenRouter (any provider)
 OpenRouter supports OAuth-style API keys. Set target to OpenRouter:
 ```bash

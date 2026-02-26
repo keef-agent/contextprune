@@ -287,8 +287,8 @@ contextprune serve --port 8899
 
 Set one environment variable:
 ```bash
-export ANTHROPIC_BASE_URL=http://localhost:8899   # Anthropic API
-export OPENAI_BASE_URL=http://localhost:8899       # OpenAI API
+export ANTHROPIC_BASE_URL=http://localhost:8899   # Anthropic API (/v1/messages)
+export OPENAI_BASE_URL=http://localhost:8899       # OpenAI API (/v1/chat/completions + /v1/responses)
 ```
 
 That's it. Works with: LangChain, LangGraph, CrewAI, AG2/AutoGen, OpenAI Agents SDK, PydanticAI, Google ADK, Mastra, Vercel AI SDK, NanoClaw, LlamaIndex, Claude Code, and any other framework that respects these env vars.
