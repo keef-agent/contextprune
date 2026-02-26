@@ -44,8 +44,6 @@ cp -r integrations/openclaw ~/.agents/skills/contextprune
 
 ## Shared References
 
-Science and provider docs live under `openclaw/references/` and are referenced
-by all three integrations:
-
 - `openclaw/references/science.md` — academic foundations, real-world results
 - `openclaw/references/providers.md` — provider-specific routing (Grok, Gemini, OpenRouter, etc.)
+- `oauth-subscriptions.md` — using ContextPrune with claude.ai / Codex OAuth subscriptions
