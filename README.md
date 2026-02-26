@@ -40,8 +40,8 @@ This approach is grounded in established NLP research:
 
 - **Semantic deduplication via embeddings**: Broadly validated in retrieval-augmented generation literature (RAG dedup). Similar similarity thresholds (0.8-0.85) are standard in RAG pipelines for chunk deduplication.
 - **LLMLingua** ([Jiang et al., 2023](https://arxiv.org/abs/2310.05736)): Demonstrated 20x compression with <1.5% accuracy loss using token-level importance scoring. ContextPrune uses sentence-level semantic similarity instead — safer for agent contexts where removing wrong tokens causes hallucination.
-- **ACON** ([Zhong et al., 2024](https://arxiv.org/abs/2406.06548)): Showed 26-54% context reduction specifically in agentic workloads using semantic redundancy detection — the most directly relevant prior work to what ContextPrune does.
-- **Token Elasticity / TALE** ([Ivgi et al., 2024](https://arxiv.org/abs/2407.07955)): Quantified that models require explicit, calibrated token budgets — vague instructions like "be concise" don't work. ContextPrune removes redundancy at the infrastructure level instead, bypassing this problem entirely.
+- **ACON** ([Kang et al., Microsoft, 2025](https://arxiv.org/abs/2510.00615)): Validated that 26-54% context reduction is achievable in agentic workloads by targeting the agent memory + tool output + history overlap — the same redundancy ContextPrune removes. Uses a different method (guideline optimization via failure analysis) but independently confirms the problem magnitude.
+- **Token Elasticity / TALE** ([Han et al., 2024](https://arxiv.org/abs/2412.18547)): Quantified that models require explicit, calibrated token budgets — vague instructions like "be concise" don't work. ContextPrune removes redundancy at the infrastructure level instead, bypassing this problem entirely.
 
 ### What Gets Removed
 
