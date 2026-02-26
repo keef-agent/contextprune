@@ -1,10 +1,31 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
 dist/
 build/
-.pytest_cache/
+.venv/
+venv/
 *.egg
-.coverage
-htmlcov/
+
+# Environment
+.env
+.env.*
+
+# Stats and logs
+~/.contextprune/
+*.jsonl
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Model cache
+.cache/
+sentence_transformers/

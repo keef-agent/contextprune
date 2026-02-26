@@ -1,8 +1,0 @@
-{
-  "n_annotated": 100,
-  "mean_safe_compression_rate": 0.6561,
-  "std_safe_compression_rate": 0.2909,
-  "min_scr": 0.0,
-  "max_scr": 1.0,
-  "annotator": "gpt-5.2-pro-manual"
-}

@@ -142,32 +142,17 @@ async def proxy_messages(request: Request) -> Response:
     model = body.get("model", "unknown")
     is_stream = body.get("stream", False)
 
-    # ---- Skip dedup for streaming (pass through unchanged) ---------------- #
-    if is_stream:
-        if not is_dry_run:
-            headers = dict(request.headers)
-            headers.pop("host", None)
-            async with httpx.AsyncClient(timeout=120) as client:
-                upstream = client.stream(
-                    "POST",
-                    f"{ANTHROPIC_BASE}/v1/messages",
-                    headers=headers,
-                    content=raw_body,
-                )
-                async with upstream as resp:
-                    return StreamingResponse(
-                        resp.aiter_bytes(),
-                        status_code=resp.status_code,
-                        headers=dict(resp.headers),
-                        media_type=resp.headers.get("content-type", "text/event-stream"),
-                    )
-
-    # ---- Deduplication ---------------------------------------------------- #
+    # ---- Deduplication (runs on input for ALL requests, including streaming) #
     messages, system = _extract_text_content(body)
     new_messages, new_system, orig_tok, comp_tok, removed, ratio = _run_dedup(messages, system)
     saved = orig_tok - comp_tok
 
     # Stdout log
+    if is_stream:
+        print(
+            "[ContextPrune] Streaming request — dedup applied to input, streaming response passed through",
+            flush=True,
+        )
     print(
         f"[ContextPrune] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
         flush=True,
@@ -207,6 +192,22 @@ async def proxy_messages(request: Request) -> Response:
     headers.pop("content-length", None)  # let httpx recalculate
 
     try:
+        if is_stream:
+            # Dedup was applied to input; forward deduplicated body as streaming request
+            async with httpx.AsyncClient(timeout=120) as client:
+                upstream = client.stream(
+                    "POST",
+                    f"{ANTHROPIC_BASE}/v1/messages",
+                    headers=headers,
+                    json=modified_body,
+                )
+                async with upstream as resp:
+                    return StreamingResponse(
+                        resp.aiter_bytes(),
+                        status_code=resp.status_code,
+                        headers=dict(resp.headers),
+                        media_type=resp.headers.get("content-type", "text/event-stream"),
+                    )
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{ANTHROPIC_BASE}/v1/messages",
@@ -249,26 +250,6 @@ async def proxy_chat_completions(request: Request) -> Response:
     # ---- Determine target URL --------------------------------------------- #
     target_base = request.headers.get("x-target-url", _openai_target).rstrip("/")
 
-    # ---- Skip dedup for streaming (pass through unchanged) ---------------- #
-    if is_stream and not is_dry_run:
-        headers = dict(request.headers)
-        headers.pop("host", None)
-        headers.pop("x-target-url", None)
-        async with httpx.AsyncClient(timeout=120) as client:
-            upstream = client.stream(
-                "POST",
-                f"{target_base}/v1/chat/completions",
-                headers=headers,
-                content=raw_body,
-            )
-            async with upstream as resp:
-                return StreamingResponse(
-                    resp.aiter_bytes(),
-                    status_code=resp.status_code,
-                    headers=dict(resp.headers),
-                    media_type=resp.headers.get("content-type", "text/event-stream"),
-                )
-
     # ---- Extract messages — OpenAI puts system inside the messages array -- #
     messages: List[Dict[str, Any]] = body.get("messages", [])
     system_messages = [m for m in messages if m.get("role") == "system"]
@@ -283,7 +264,7 @@ async def proxy_chat_completions(request: Request) -> Response:
             for m in system_messages
         ).strip() or None
 
-    # ---- Deduplication (run on non-system messages with system context) --- #
+    # ---- Deduplication (runs on input for ALL requests, including streaming) #
     new_messages, new_system, orig_tok, comp_tok, removed, ratio = _run_dedup(
         non_system_messages, system
     )
@@ -296,6 +277,11 @@ async def proxy_chat_completions(request: Request) -> Response:
     final_messages.extend(new_messages)
 
     # Stdout log
+    if is_stream:
+        print(
+            "[ContextPrune] Streaming request — dedup applied to input, streaming response passed through",
+            flush=True,
+        )
     print(
         f"[ContextPrune/OAI] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
         flush=True,
@@ -335,6 +321,22 @@ async def proxy_chat_completions(request: Request) -> Response:
     headers.pop("x-target-url", None)  # don't forward our custom header
 
     try:
+        if is_stream:
+            # Dedup was applied to input; forward deduplicated body as streaming request
+            async with httpx.AsyncClient(timeout=120) as client:
+                upstream = client.stream(
+                    "POST",
+                    f"{target_base}/v1/chat/completions",
+                    headers=headers,
+                    json=modified_body,
+                )
+                async with upstream as resp:
+                    return StreamingResponse(
+                        resp.aiter_bytes(),
+                        status_code=resp.status_code,
+                        headers=dict(resp.headers),
+                        media_type=resp.headers.get("content-type", "text/event-stream"),
+                    )
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{target_base}/v1/chat/completions",
@@ -387,25 +389,6 @@ async def proxy_responses(request: Request) -> Response:
     # ---- Determine target URL --------------------------------------------- #
     target_base = _openai_target.rstrip("/")
 
-    # ---- Skip dedup for streaming (pass through unchanged) ---------------- #
-    if is_stream and not is_dry_run:
-        headers = dict(request.headers)
-        headers.pop("host", None)
-        async with httpx.AsyncClient(timeout=120) as client:
-            upstream = client.stream(
-                "POST",
-                f"{target_base}/v1/responses",
-                headers=headers,
-                content=raw_body,
-            )
-            async with upstream as resp:
-                return StreamingResponse(
-                    resp.aiter_bytes(),
-                    status_code=resp.status_code,
-                    headers=dict(resp.headers),
-                    media_type=resp.headers.get("content-type", "text/event-stream"),
-                )
-
     # ---- Extract input and instructions ------------------------------------ #
     # ``input`` items use the same {role, content} structure as messages.
     # Input items may also be plain strings; wrap those as user messages for dedup.
@@ -439,6 +422,11 @@ async def proxy_responses(request: Request) -> Response:
         # Items beyond new_messages length were removed by dedup — skip them
 
     # Stdout log
+    if is_stream:
+        print(
+            "[ContextPrune] Streaming request — dedup applied to input, streaming response passed through",
+            flush=True,
+        )
     print(
         f"[ContextPrune/Responses] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
         flush=True,
@@ -481,6 +469,22 @@ async def proxy_responses(request: Request) -> Response:
     headers.pop("content-length", None)
 
     try:
+        if is_stream:
+            # Dedup was applied to input; forward deduplicated body as streaming request
+            async with httpx.AsyncClient(timeout=120) as client:
+                upstream = client.stream(
+                    "POST",
+                    f"{target_base}/v1/responses",
+                    headers=headers,
+                    json=modified_body,
+                )
+                async with upstream as resp:
+                    return StreamingResponse(
+                        resp.aiter_bytes(),
+                        status_code=resp.status_code,
+                        headers=dict(resp.headers),
+                        media_type=resp.headers.get("content-type", "text/event-stream"),
+                    )
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{target_base}/v1/responses",

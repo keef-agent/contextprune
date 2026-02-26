@@ -1,11 +1,15 @@
 # ContextPrune
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-225%20passing-brightgreen.svg)]()
+
 **Cut your LLM token usage by 40-60% with a single environment variable.**
 
 ContextPrune is a local semantic deduplication proxy. It sits between your agent and the LLM API, strips repeated information from context before it hits the model, and forwards the cleaned request. No code changes. No data leaves your machine except to the LLM you already trust.
 
 **Real results measured on live sessions:**
-- 2-hour AI agent session (OpenClaw): **46% token reduction**
+- 2-hour AI agent session (OpenClaw): **46% token reduction** (measured on real conversation history)
 - Agentic context (system prompt + memory + tool outputs): **36-45% reduction**
 - Non-redundant contexts: **0% reduction** *(correctly passes through unchanged)*
 
@@ -30,7 +34,7 @@ All of these overlap heavily. The model sees the same facts stated four differen
 
 ### The Solution: Semantic Deduplication
 
-ContextPrune encodes every sentence in your context using a lightweight sentence embedding model ([paraphrase-MiniLM-L6-v2](https://www.sbert.net/), 22M params, runs locally in <50ms). It then computes pairwise cosine similarity between sentences across all messages and removes near-duplicates above a configurable threshold (default: 0.82).
+ContextPrune encodes every sentence in your context using a lightweight sentence embedding model ([paraphrase-MiniLM-L6-v2](https://www.sbert.net/), 22M params, processes in <50ms per request (15s model load on first call, then cached)). It then computes pairwise cosine similarity between sentences across all messages and removes near-duplicates above a configurable threshold (default: 0.82).
 
 This approach is grounded in established NLP research:
 
@@ -50,8 +54,10 @@ Only sentences that are semantically near-identical to something already in the 
 ### Install
 
 ```bash
-pip install contextprune
+pip install git+https://github.com/keef-agent/contextprune.git
 ```
+
+PyPI release coming soon.
 
 ### Start the proxy
 
@@ -69,6 +75,8 @@ export OPENAI_BASE_URL=http://localhost:8899       # OpenAI API
 That's it. Every LLM API call from any framework now goes through ContextPrune first.
 
 Works with: LangChain, LangGraph, CrewAI, AG2/AutoGen, OpenAI Agents SDK, PydanticAI, Google ADK, Mastra, Vercel AI SDK, LlamaIndex, Claude Code, and any other framework that respects these env vars.
+
+> **Streaming:** Deduplication runs on the input for all requests, including streaming ones. The compressed input is forwarded and the streaming response passes through unchanged. Works with Claude Code and any framework that streams by default.
 
 ---
 
@@ -240,7 +248,7 @@ Agent Framework → localhost:8899 → ContextPrune dedup → api.anthropic.com
                                    logs to ~/.contextprune/stats.jsonl
 ```
 
-Streaming requests (`"stream": true`) are passed through unchanged. Deduplication only runs on non-streaming requests.
+Deduplication runs on the input for all requests, including streaming ones. The compressed input is forwarded and the streaming response passes through unchanged.
 
 ---
 

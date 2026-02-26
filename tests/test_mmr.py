@@ -345,7 +345,11 @@ class TestMMRIntegration:
     @pytest.mark.integration
     def test_real_embeddings_compress_rag_chunks(self):
         """With real embeddings, RAG chunks with semantic overlap should compress."""
-        from benchmarks.scenarios import get_scenario2
+        benchmarks_scenarios = pytest.importorskip(
+            "benchmarks.scenarios",
+            reason="benchmarks module not available",
+        )
+        get_scenario2 = benchmarks_scenarios.get_scenario2
         system, messages = get_scenario2()
 
         mmr = MMRSelector(
