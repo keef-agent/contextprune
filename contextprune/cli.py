@@ -149,6 +149,11 @@ def main() -> None:
         default="127.0.0.1",
         help="Host to bind to (default: 127.0.0.1)",
     )
+    serve_parser.add_argument(
+        "--openai-target",
+        default=None,
+        help="Base URL for OpenAI-compatible endpoint target (default: https://api.openai.com or CONTEXTPRUNE_OPENAI_TARGET env var)",
+    )
 
     args = parser.parse_args()
 
@@ -161,6 +166,7 @@ def main() -> None:
             threshold=args.threshold,
             enable_log=not args.no_log,
             host=args.host,
+            openai_target=args.openai_target,
         )
     else:
         parser.print_help()

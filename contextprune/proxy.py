@@ -2,6 +2,7 @@
 ContextPrune Proxy Server
 
 Drop-in Anthropic API proxy that deduplicates context before forwarding.
+Also supports OpenAI-compatible /v1/chat/completions endpoint.
 
 Usage:
     python -m contextprune.proxy --port 8899
@@ -37,6 +38,7 @@ _deduplicator: Optional[SemanticDeduplicator] = None
 _enable_logging: bool = True
 _stats_path: Path = Path.home() / ".contextprune" / "stats.jsonl"
 _request_counter: int = 0
+_openai_target: str = os.environ.get("CONTEXTPRUNE_OPENAI_TARGET", "https://api.openai.com")
 
 log = logging.getLogger("contextprune.proxy")
 
@@ -106,7 +108,20 @@ def _run_dedup(
 
 
 # --------------------------------------------------------------------------- #
-# Route: POST /v1/messages                                                     #
+# Route: GET /                                                                 #
+# --------------------------------------------------------------------------- #
+
+@app.get("/")
+async def root() -> JSONResponse:
+    return JSONResponse({
+        "status": "ok",
+        "version": "0.1.0",
+        "endpoints": ["/v1/messages", "/v1/chat/completions"],
+    })
+
+
+# --------------------------------------------------------------------------- #
+# Route: POST /v1/messages  (Anthropic)                                        #
 # --------------------------------------------------------------------------- #
 
 @app.post("/v1/messages")
@@ -210,6 +225,134 @@ async def proxy_messages(request: Request) -> Response:
 
 
 # --------------------------------------------------------------------------- #
+# Route: POST /v1/chat/completions  (OpenAI-compatible)                        #
+# --------------------------------------------------------------------------- #
+
+@app.post("/v1/chat/completions")
+async def proxy_chat_completions(request: Request) -> Response:
+    global _request_counter
+    _request_counter += 1
+    q = _request_counter
+
+    raw_body = await request.body()
+    try:
+        body = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    # ---- Dry-run mode ----------------------------------------------------- #
+    is_dry_run = body.pop("__contextprune_dry_run", False)
+
+    model = body.get("model", "unknown")
+    is_stream = body.get("stream", False)
+
+    # ---- Determine target URL --------------------------------------------- #
+    target_base = request.headers.get("x-target-url", _openai_target).rstrip("/")
+
+    # ---- Skip dedup for streaming (pass through unchanged) ---------------- #
+    if is_stream and not is_dry_run:
+        headers = dict(request.headers)
+        headers.pop("host", None)
+        headers.pop("x-target-url", None)
+        async with httpx.AsyncClient(timeout=120) as client:
+            upstream = client.stream(
+                "POST",
+                f"{target_base}/v1/chat/completions",
+                headers=headers,
+                content=raw_body,
+            )
+            async with upstream as resp:
+                return StreamingResponse(
+                    resp.aiter_bytes(),
+                    status_code=resp.status_code,
+                    headers=dict(resp.headers),
+                    media_type=resp.headers.get("content-type", "text/event-stream"),
+                )
+
+    # ---- Extract messages — OpenAI puts system inside the messages array -- #
+    messages: List[Dict[str, Any]] = body.get("messages", [])
+    system_messages = [m for m in messages if m.get("role") == "system"]
+    non_system_messages = [m for m in messages if m.get("role") != "system"]
+
+    # Combine system messages into a single system string
+    system: Optional[str] = None
+    if system_messages:
+        system = " ".join(
+            m.get("content", "") if isinstance(m.get("content"), str)
+            else " ".join(b.get("text", "") for b in m.get("content", []) if isinstance(b, dict))
+            for m in system_messages
+        ).strip() or None
+
+    # ---- Deduplication (run on non-system messages with system context) --- #
+    new_messages, new_system, orig_tok, comp_tok, removed, ratio = _run_dedup(
+        non_system_messages, system
+    )
+    saved = orig_tok - comp_tok
+
+    # Reconstruct OpenAI-format messages array: system first, then deduplicated messages
+    final_messages: List[Dict[str, Any]] = []
+    if new_system:
+        final_messages.append({"role": "system", "content": new_system})
+    final_messages.extend(new_messages)
+
+    # Stdout log
+    print(
+        f"[ContextPrune/OAI] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
+        flush=True,
+    )
+
+    # File log
+    stat_record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "model": model,
+        "endpoint": "chat/completions",
+        "original_tokens": orig_tok,
+        "compressed_tokens": comp_tok,
+        "ratio": round(ratio, 4),
+        "sentences_removed": removed,
+    }
+    _write_stat(stat_record)
+
+    # ---- Dry-run: return stats only --------------------------------------- #
+    if is_dry_run:
+        return JSONResponse({
+            "contextprune": {
+                "original_tokens": orig_tok,
+                "compressed_tokens": comp_tok,
+                "ratio": round(ratio, 4),
+                "sentences_removed": removed,
+            }
+        })
+
+    # ---- Build modified body ---------------------------------------------- #
+    modified_body = dict(body)
+    modified_body["messages"] = final_messages
+
+    # ---- Forward to OpenAI-compatible target ------------------------------ #
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    headers.pop("content-length", None)
+    headers.pop("x-target-url", None)  # don't forward our custom header
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{target_base}/v1/chat/completions",
+                headers=headers,
+                json=modified_body,
+            )
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+            media_type=resp.headers.get("content-type", "application/json"),
+        )
+    except Exception as exc:
+        log.error("Upstream request failed: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+# --------------------------------------------------------------------------- #
 # Health check                                                                 #
 # --------------------------------------------------------------------------- #
 
@@ -227,6 +370,7 @@ def serve(
     threshold: float = 0.82,
     enable_log: bool = True,
     host: str = "127.0.0.1",
+    openai_target: Optional[str] = None,
 ) -> None:
     """Start the ContextPrune proxy server.
 
@@ -235,15 +379,20 @@ def serve(
         threshold: Semantic similarity threshold for deduplication. Default 0.82.
         enable_log: Whether to log stats to ~/.contextprune/stats.jsonl.
         host: Host to bind to. Default 127.0.0.1 (localhost only).
+        openai_target: Base URL for OpenAI-compatible target. Default https://api.openai.com.
+                       Can also be set via CONTEXTPRUNE_OPENAI_TARGET env var.
     """
     import uvicorn
 
-    global _deduplicator, _enable_logging
+    global _deduplicator, _enable_logging, _openai_target
     _deduplicator = SemanticDeduplicator(similarity_threshold=threshold)
     _enable_logging = enable_log
+    if openai_target:
+        _openai_target = openai_target.rstrip("/")
 
     print(f"[ContextPrune] Proxy starting on http://{host}:{port}", flush=True)
     print(f"[ContextPrune] Threshold={threshold} | Logging={'ON' if enable_log else 'OFF'}", flush=True)
+    print(f"[ContextPrune] OpenAI target: {_openai_target}", flush=True)
     if enable_log:
         print(f"[ContextPrune] Stats → {_stats_path}", flush=True)
 
@@ -278,6 +427,11 @@ def _parse_args() -> argparse.Namespace:
         default="127.0.0.1",
         help="Host to bind to (default: 127.0.0.1)",
     )
+    parser.add_argument(
+        "--openai-target",
+        default=None,
+        help="Base URL for OpenAI-compatible endpoint target (default: https://api.openai.com or CONTEXTPRUNE_OPENAI_TARGET env var)",
+    )
     return parser.parse_args()
 
 
@@ -288,4 +442,5 @@ if __name__ == "__main__":
         threshold=args.threshold,
         enable_log=not args.no_log,
         host=args.host,
+        openai_target=args.openai_target,
     )

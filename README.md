@@ -278,46 +278,27 @@ contextprune serve --port 8899
 Streaming requests (`"stream": true`) are passed through to Anthropic unchanged.
 Deduplication only runs on non-streaming requests.
 
-## Integrations
+## Works with every framework
 
-The proxy works with every major AI agent framework. Start it once, point your framework's `base_url` at `http://localhost:8899`, done.
-
+Start the proxy:
 ```bash
 contextprune serve --port 8899
 ```
 
-| Framework | Integration | Works |
-|-----------|-------------|-------|
-| OpenClaw | `baseUrl` config | ✅ |
-| Claude Code | `ANTHROPIC_BASE_URL` env | ✅ |
-| LangChain | `base_url` param | ✅ |
-| LangGraph | `base_url` param | ✅ |
-| OpenAI Agents SDK | `base_url` param | ✅ |
-| AG2 / AutoGen | `base_url` in config_list | ✅ |
-| CrewAI | LangChain wrapper | ✅ |
-| PydanticAI | `base_url` param | ✅ |
-| Google ADK | `ANTHROPIC_BASE_URL` env | ✅ |
-| Mastra | `baseURL` in SDK | ✅ |
-| Vercel AI SDK | `baseURL` in createAnthropic | ✅ |
-| NanoClaw | `ANTHROPIC_BASE_URL` env | ✅ |
-| LlamaIndex | `base_url` param | ✅ |
+Set one environment variable:
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:8899   # Anthropic API
+export OPENAI_BASE_URL=http://localhost:8899       # OpenAI API
+```
 
-Full integration guides:
+That's it. Works with: LangChain, LangGraph, CrewAI, AG2/AutoGen, OpenAI Agents SDK, PydanticAI, Google ADK, Mastra, Vercel AI SDK, NanoClaw, LlamaIndex, Claude Code, and any other framework that respects these env vars.
 
-- [OpenClaw](docs/integrations/openclaw.md)
-- [Claude Code](docs/integrations/claude-code.md)
-- [LangChain + LangGraph](docs/integrations/langchain.md)
-- [OpenAI Agents SDK](docs/integrations/openai-agents.md)
-- [AG2 / AutoGen](docs/integrations/autogen.md)
-- [CrewAI](docs/integrations/crewai.md)
-- [PydanticAI](docs/integrations/pydanticai.md)
-- [Google ADK](docs/integrations/google-adk.md)
-- [Mastra](docs/integrations/mastra.md)
-- [Vercel AI SDK](docs/integrations/vercel-ai.md)
-- [NanoClaw](docs/integrations/nanoclaw.md)
-- [LlamaIndex](docs/integrations/llamaindex.md)
+**Real results measured on live sessions:**
+- 2-hour AI agent session (OpenClaw): **46% token reduction**
+- Agentic context (system prompt + memory + tool outputs): **36.6% reduction**
+- Non-redundant contexts: **0% reduction** (correctly passes through unchanged)
 
-Or see the [single-page quick reference](INTEGRATIONS.md).
+> Using a subscription? See [OAuth subscription guide](docs/oauth-subscriptions.md).
 
 ## Contributing
 
