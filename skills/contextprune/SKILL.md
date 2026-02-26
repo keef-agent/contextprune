@@ -11,7 +11,7 @@ ContextPrune is a local semantic deduplication proxy. It intercepts LLM API call
 
 ```bash
 # Install
-pip install contextprune
+pip install git+https://github.com/keef-agent/contextprune.git
 
 # Start the proxy
 contextprune serve --port 8899
