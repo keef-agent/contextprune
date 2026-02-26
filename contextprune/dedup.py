@@ -78,6 +78,24 @@ def _require_embeddings():
     )
 
 
+def _is_instructional(text: str) -> bool:
+    """Heuristic: return True if a chunk reads as an imperative instruction.
+
+    Matches patterns like "Do not ...", "Never ...", "Always ...", "You must ...",
+    "You are ...", "Do not ...", "NEVER ...", etc.  Used by protect_system mode to
+    flag chunks that must be kept even if semantically similar to another chunk.
+
+    This is intentionally broad — false positives (marking a non-instruction as
+    instructional) are safe; false negatives (missing an instruction) are not.
+    """
+    imperative_prefixes = (
+        r"^(do not|don't|never|always|must|you must|you are|you should|"
+        r"you will|you cannot|you can't|do not|ensure|make sure|"
+        r"remember|important|note:|warning:|critical:)"
+    )
+    return bool(re.match(imperative_prefixes, text.strip(), re.IGNORECASE))
+
+
 class SemanticDeduplicator:
     """Remove semantically redundant content across messages using embeddings.
 
@@ -97,6 +115,15 @@ class SemanticDeduplicator:
     The default threshold (0.82) is a starting point. For research use, tune via
     grid search (0.70, 0.75, 0.80, 0.82, 0.85, 0.90, 0.95) on your validation set.
 
+    Safety note on protect_system (default True):
+        Research on KV cache compression ("The Pitfalls of KV Cache Compression",
+        arXiv 2510.00231, 2025) showed that compression can silently cause LLMs to
+        ignore certain instructions — particularly system-level rules that are
+        phrased similarly to each other. With protect_system=True (the default),
+        the system prompt is NEVER compressed: all its chunks are added to the
+        seen pool so that duplicate content in *messages* is still stripped, but
+        the system prompt itself is returned unchanged.
+
     Attributes:
         removal_log: List of (removed_chunk, best_matching_kept_chunk, score)
             tuples, populated after each call to deduplicate(). Useful for
@@ -110,6 +137,7 @@ class SemanticDeduplicator:
         chunk_by: str = "sentence",
         min_chunk_tokens: int = 5,
         preserve_first: bool = True,
+        protect_system: bool = True,
     ) -> None:
         """Initialize the deduplicator.
 
@@ -126,6 +154,15 @@ class SemanticDeduplicator:
                 Default: 5.
             preserve_first: Always keep the first occurrence of any content
                 (never removes the first chunk seen). Default: True.
+            protect_system: If True (default), the system prompt is never
+                compressed — all its chunks are added to the seen pool so
+                message-level duplicates are still stripped, but the system
+                prompt itself is returned byte-for-byte unchanged.
+
+                Set to False only if you have measured that your system prompt
+                contains genuine redundancy and you have validated that removing
+                it does not affect task completion. See safety note in the class
+                docstring.
         """
         # Normalize shorthand model names
         if model == "minilm":
@@ -135,6 +172,7 @@ class SemanticDeduplicator:
         self.chunk_by = chunk_by
         self.min_chunk_tokens = min_chunk_tokens
         self.preserve_first = preserve_first
+        self.protect_system = protect_system
         self.removal_log: List[Tuple[str, str, float]] = []
 
     def deduplicate(
@@ -229,9 +267,36 @@ class SemanticDeduplicator:
         new_system = system
         if system and system.strip():
             sys_chunks = _split_chunks(system, self.chunk_by)
-            kept_sys = process_chunks(sys_chunks)
-            # Reconstruct with spaces; fall back to original if everything got removed
-            new_system = " ".join(kept_sys) if kept_sys else system
+            if self.protect_system:
+                # Safe mode: add all eligible system chunks to the seen pool
+                # WITHOUT removing any of them.  The system prompt is returned
+                # byte-for-byte unchanged so no instruction can be silently
+                # dropped.  Message-level content that repeats the system prompt
+                # is still stripped (because those chunks are now in the pool).
+                eligible_sys = [
+                    c for c in sys_chunks
+                    if _count_tokens_approx(c) >= self.min_chunk_tokens
+                ]
+                if eligible_sys:
+                    doc_embs = emb.embed(
+                        eligible_sys, self.model, prefix=_STORE_PREFIX
+                    )
+                    for i, chunk in enumerate(eligible_sys):
+                        seen_embeddings.append(doc_embs[i])
+                        seen_texts.append(chunk)
+                new_system = system  # unchanged
+            else:
+                # Opt-out: allow the system prompt to be deduplicated.
+                # Process chunks one at a time so each chunk is checked
+                # against previously-added chunks (enables within-system dedup).
+                # Only use if you have validated that removing similar
+                # instructions does not affect task completion.
+                # See class docstring for the safety note.
+                kept_sys: List[str] = []
+                for chunk in sys_chunks:
+                    result = process_chunks([chunk])
+                    kept_sys.extend(result)
+                new_system = " ".join(kept_sys) if kept_sys else system
 
         # --- Process messages in order ---
         new_messages: List[Dict[str, Any]] = []

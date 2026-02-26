@@ -205,6 +205,22 @@ contextprune serve --port 8899 --no-log
 contextprune serve --port 8899 --log
 ```
 
+### System prompt protection
+
+By default, ContextPrune **never modifies the system prompt** (`protect_system=True`). All system chunks are added to the deduplication pool (so redundant content in *messages* is still stripped), but the system prompt itself is returned byte-for-byte unchanged.
+
+This is the safe default. Research on compression-induced instruction failures ([arXiv 2510.00231](https://arxiv.org/abs/2510.00231)) showed that removing semantically similar instructions from a system prompt — even when they look redundant — can silently cause the model to stop following them.
+
+To opt out (Python API only):
+
+```python
+from contextprune.dedup import SemanticDeduplicator
+
+dedup = SemanticDeduplicator(protect_system=False)
+```
+
+Only do this if you have measured that your system prompt contains genuine redundancy and validated that removing it doesn't affect task completion.
+
 ### Dry-run test (no API key needed)
 
 Add `"__contextprune_dry_run": true` to any request body to skip forwarding and get compression stats back directly:

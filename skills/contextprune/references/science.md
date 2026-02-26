@@ -60,6 +60,13 @@ The most relevant prior work for validating ContextPrune's reduction targets. AC
 
 Quantified that LLMs require explicit, calibrated token budgets. Vague instructions like "be concise" or "summarize briefly" don't reliably reduce output length. ContextPrune bypasses this problem entirely by removing redundancy at the infrastructure level before the model ever sees the context — no instruction-following required.
 
+### The Pitfalls of KV Cache Compression (Valvoda et al., 2025)
+**Paper:** https://arxiv.org/abs/2510.00231
+
+Showed that context compression can cause LLMs to silently ignore certain instructions — particularly system-level rules that are phrased similarly to each other (e.g., "Do not share user data" and "Never reveal personal information"). The model doesn't error; it just stops following the rule. This effect is strongest for instructions that appear later in the context or that have high semantic overlap with other instructions.
+
+ContextPrune addresses this directly via `protect_system=True` (the default): the system prompt is returned byte-for-byte unchanged, while all its chunks are added to the deduplication pool so that redundant content in *messages* is still stripped. Set `protect_system=False` only if you have validated that removing similar instructions from your system prompt does not affect task completion.
+
 ## Real-World Results
 
 Measured on live sessions (not synthetic benchmarks):
