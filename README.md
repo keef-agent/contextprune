@@ -155,24 +155,35 @@ Your OAuth token passes through unchanged. Only the message content is deduplica
 
 **Subscription benefit:** Codex subscription plans have hourly/daily usage limits measured in tokens. With 40%+ compression, you get significantly more agent turns before hitting those limits.
 
-### Agent Skills (OpenClaw, Codex, and agentskills.io-compatible frameworks)
+### Claude Code
 
-ContextPrune ships a skill that works across any framework built on the [open agent skills standard](https://agentskills.io) — the same format used by OpenClaw and Codex.
+Copy the slash command to your Claude commands directory:
 
-**Install the skill:**
 ```bash
-# For Codex
-mkdir -p ~/.agents/skills
-cp -r skills/contextprune ~/.agents/skills/
-
-# For OpenClaw
-mkdir -p ~/.openclaw/workspace/skills
-cp -r skills/contextprune ~/.openclaw/workspace/skills/
+cp integrations/claude-code/contextprune.md ~/.claude/commands/contextprune.md
 ```
 
-Once installed, you can invoke it explicitly (`$contextprune` in Codex, or it triggers implicitly when relevant) or let the agent pick it up automatically. The skill instructs the agent to check proxy status, start it if needed, and report compression stats.
+Then type `/contextprune` in Claude Code to check proxy status and view compression stats.
 
-The skill directory is at `skills/contextprune/` in this repo. One file, works everywhere.
+### OpenClaw
+
+```bash
+cp -r integrations/openclaw ~/.openclaw/workspace/skills/contextprune
+```
+
+### Codex
+
+```bash
+cp -r integrations/codex ~/.codex/workspace/skills/contextprune
+```
+
+For any [agentskills.io](https://agentskills.io)-compatible framework:
+
+```bash
+cp -r integrations/openclaw ~/.agents/skills/contextprune
+```
+
+Full integration docs: [`integrations/`](integrations/README.md)
 
 ---
 
