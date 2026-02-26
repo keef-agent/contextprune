@@ -410,10 +410,12 @@ def apply_llmlingua2(
     if item_id and dataset:
         cached = get_llmlingua2_compressed(item_id, dataset, cache=llmlingua2_cache)
         if cached:
-            return (
-                cached.get("compressed_messages", messages),
-                cached.get("compressed_system", system),
-            )
+            cached_msgs = cached.get("compressed_messages", messages)
+            # Always preserve the live final user message (has choices injected).
+            # Cache was built before choices fix; replace cached question with live one.
+            if cached_msgs and messages:
+                cached_msgs = list(cached_msgs[:-1]) + [messages[-1]]
+            return (cached_msgs, cached.get("compressed_system", system))
         else:
             logging.warning(
                 f"LLMLingua-2 cache miss for {item_id} — running live (~30s on CPU). "

@@ -283,6 +283,15 @@ class ContextInjector:
         else:
             question_with_context = question
 
+        # For multiple-choice questions (MMLU-Pro etc): append choices + letter instruction
+        choices = item.get("choices")
+        if choices:
+            choices_str = "\n".join(choices)
+            question_with_context = (
+                f"{question_with_context}\n\n{choices_str}\n\n"
+                f"Respond with only the letter of the correct answer (e.g. A)."
+            )
+
         # Final message list: history + question
         messages = list(history) + [{"role": "user", "content": question_with_context}]
 

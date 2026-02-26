@@ -179,6 +179,146 @@ Output shows token breakdown by layer, total savings, and recommendations.
 - Already-minimal system prompts
 - Conversations with mostly unique content
 
+## Proxy Server (Drop-in API Intercept)
+
+ContextPrune ships with a local HTTP proxy that intercepts Anthropic Messages
+API calls, runs semantic deduplication, and forwards the compressed request to
+the real API. No code changes needed in your app.
+
+### Architecture
+
+```
+Agent Framework → localhost:8899 → ContextPrune dedup → api.anthropic.com
+                                          ↓
+                                   logs savings to ~/.contextprune/stats.jsonl
+```
+
+### Start the proxy
+
+```bash
+# CLI
+contextprune serve --port 8899
+
+# Or via python module
+python -m contextprune.proxy --port 8899
+
+# Options
+python -m contextprune.proxy --port 8899 --threshold 0.82 --no-log
+```
+
+### Point your client at the proxy
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    base_url="http://localhost:8899",
+    api_key="your-real-key",  # forwarded as-is to Anthropic
+)
+```
+
+### Dry-run test (no Anthropic API key needed)
+
+```bash
+curl -X POST http://localhost:8899/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: test" \
+  -d '{
+    "model": "claude-sonnet-4-6",
+    "max_tokens": 10,
+    "system": "You are a helpful assistant. Acme Corp was founded in 1987 and makes enterprise software.",
+    "messages": [{"role": "user", "content": "Acme Corp was founded in 1987. They make enterprise software. Question: What year was Acme Corp founded?"}],
+    "__contextprune_dry_run": true
+  }'
+# → {"contextprune": {"original_tokens": 49, "compressed_tokens": 29, "ratio": 0.59, "sentences_removed": 2}}
+```
+
+Add `"__contextprune_dry_run": true` to any request body to skip forwarding and
+get compression stats back directly (useful for testing and CI).
+
+### Per-request console output
+
+```
+[ContextPrune] Q1 ratio=0.59 removed=2sents saved=20tok
+```
+
+### Stats log
+
+All requests are logged to `~/.contextprune/stats.jsonl`:
+
+```json
+{"timestamp": "2026-02-26T20:50:44Z", "model": "claude-sonnet-4-6", "original_tokens": 49, "compressed_tokens": 29, "ratio": 0.5918, "sentences_removed": 2}
+```
+
+### OpenClaw Integration
+
+To route OpenClaw's Anthropic requests through the proxy, add `baseUrl` to your
+`~/.openclaw/openclaw.json` under `models.providers.anthropic`:
+
+```json
+{
+  "models": {
+    "providers": {
+      "anthropic": {
+        "baseUrl": "http://localhost:8899"
+      }
+    }
+  }
+}
+```
+
+Start the proxy before starting OpenClaw:
+
+```bash
+contextprune serve --port 8899
+```
+
+### Streaming
+
+Streaming requests (`"stream": true`) are passed through to Anthropic unchanged.
+Deduplication only runs on non-streaming requests.
+
+## Integrations
+
+The proxy works with every major AI agent framework. Start it once, point your framework's `base_url` at `http://localhost:8899`, done.
+
+```bash
+contextprune serve --port 8899
+```
+
+| Framework | Integration | Works |
+|-----------|-------------|-------|
+| OpenClaw | `baseUrl` config | ✅ |
+| Claude Code | `ANTHROPIC_BASE_URL` env | ✅ |
+| LangChain | `base_url` param | ✅ |
+| LangGraph | `base_url` param | ✅ |
+| OpenAI Agents SDK | `base_url` param | ✅ |
+| AG2 / AutoGen | `base_url` in config_list | ✅ |
+| CrewAI | LangChain wrapper | ✅ |
+| PydanticAI | `base_url` param | ✅ |
+| Google ADK | `ANTHROPIC_BASE_URL` env | ✅ |
+| Mastra | `baseURL` in SDK | ✅ |
+| Vercel AI SDK | `baseURL` in createAnthropic | ✅ |
+| NanoClaw | `ANTHROPIC_BASE_URL` env | ✅ |
+| LlamaIndex | `base_url` param | ✅ |
+
+Full integration guides:
+
+- [OpenClaw](docs/integrations/openclaw.md)
+- [Claude Code](docs/integrations/claude-code.md)
+- [LangChain + LangGraph](docs/integrations/langchain.md)
+- [OpenAI Agents SDK](docs/integrations/openai-agents.md)
+- [AG2 / AutoGen](docs/integrations/autogen.md)
+- [CrewAI](docs/integrations/crewai.md)
+- [PydanticAI](docs/integrations/pydanticai.md)
+- [Google ADK](docs/integrations/google-adk.md)
+- [Mastra](docs/integrations/mastra.md)
+- [Vercel AI SDK](docs/integrations/vercel-ai.md)
+- [NanoClaw](docs/integrations/nanoclaw.md)
+- [LlamaIndex](docs/integrations/llamaindex.md)
+
+Or see the [single-page quick reference](INTEGRATIONS.md).
+
 ## Contributing
 
 ```bash

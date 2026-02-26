@@ -3,6 +3,13 @@
 from .core import Config, wrap, wrap_openai, WrappedClient, WrappedOpenAIClient
 from .stats import CompressionStats
 
+
+def serve(*args, **kwargs):
+    """Start the ContextPrune proxy server. See contextprune.proxy.serve for args."""
+    from .proxy import serve as _serve  # lazy import to avoid circular-import RuntimeWarning
+    return _serve(*args, **kwargs)
+
+
 __all__ = [
     "wrap",
     "wrap_openai",
@@ -10,4 +17,5 @@ __all__ = [
     "CompressionStats",
     "WrappedClient",
     "WrappedOpenAIClient",
+    "serve",
 ]

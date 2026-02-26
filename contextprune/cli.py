@@ -123,10 +123,45 @@ def main() -> None:
         help="Show detailed output",
     )
 
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="Start the ContextPrune proxy server (drop-in Anthropic API proxy)",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=8899,
+        help="Port to listen on (default: 8899)",
+    )
+    serve_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.82,
+        help="Similarity threshold for deduplication (default: 0.82)",
+    )
+    serve_parser.add_argument(
+        "--no-log",
+        action="store_true",
+        help="Disable stats file logging",
+    )
+    serve_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind to (default: 127.0.0.1)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "profile":
         _profile(args.input, verbose=args.verbose)
+    elif args.command == "serve":
+        from .proxy import serve
+        serve(
+            port=args.port,
+            threshold=args.threshold,
+            enable_log=not args.no_log,
+            host=args.host,
+        )
     else:
         parser.print_help()
         sys.exit(1)
