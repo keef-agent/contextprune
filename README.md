@@ -10,7 +10,6 @@ ContextPrune is a local semantic deduplication proxy. It sits between your agent
 
 **Real results measured on live sessions:**
 - 2-hour AI agent session (OpenClaw): **46% token reduction** (measured on real conversation history)
-- Agentic context (system prompt + memory + tool outputs): **36-45% reduction**
 - Non-redundant contexts: **0% reduction** *(correctly passes through unchanged)*
 
 **Why it matters:**
