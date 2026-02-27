@@ -202,6 +202,12 @@ contextprune serve --port 8899 --no-log
 
 # Enable verbose per-request output
 contextprune serve --port 8899 --log
+
+# Allow system prompt deduplication (off by default)
+contextprune serve --port 8899 --no-protect-system
+
+# Deduplicate tool_result content / file reads (off by default)
+contextprune serve --port 8899 --dedup-tool-results
 ```
 
 ### System prompt protection
@@ -210,11 +216,15 @@ By default, ContextPrune **never modifies the system prompt** (`protect_system=T
 
 This is the safe default. Research on compression-induced instruction failures ([arXiv 2510.00231](https://arxiv.org/abs/2510.00231)) showed that removing semantically similar instructions from a system prompt, even when they look redundant, can silently cause the model to stop following them.
 
-To opt out (Python API only):
+To opt out:
+
+```bash
+contextprune serve --port 8899 --no-protect-system
+```
 
 ```python
+# Python API
 from contextprune.dedup import SemanticDeduplicator
-
 dedup = SemanticDeduplicator(protect_system=False)
 ```
 
@@ -228,11 +238,15 @@ Tool results are still read into the deduplication pool — so if a later assist
 
 This is the right default. Tool results contain raw factual data. Removing sentences from a file read can give the model an incomplete or misleading view of the actual content, which causes silent reasoning errors that are hard to debug.
 
-To opt in to deduplicating tool result content (Python API only):
+To opt in to deduplicating tool result content:
+
+```bash
+contextprune serve --port 8899 --dedup-tool-results
+```
 
 ```python
+# Python API
 from contextprune.dedup import SemanticDeduplicator
-
 dedup = SemanticDeduplicator(dedup_tool_results=True)
 ```
 

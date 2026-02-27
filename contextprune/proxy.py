@@ -532,6 +532,8 @@ def serve(
     enable_log: bool = True,
     host: str = "127.0.0.1",
     openai_target: Optional[str] = None,
+    protect_system: bool = True,
+    dedup_tool_results: bool = False,
 ) -> None:
     """Start the ContextPrune proxy server.
 
@@ -542,17 +544,26 @@ def serve(
         host: Host to bind to. Default 127.0.0.1 (localhost only).
         openai_target: Base URL for OpenAI-compatible target. Default https://api.openai.com.
                        Can also be set via CONTEXTPRUNE_OPENAI_TARGET env var.
+        protect_system: If True (default), system prompt is never modified.
+        dedup_tool_results: If True, deduplicate tool_result content. Default False.
     """
     import uvicorn
 
     global _deduplicator, _enable_logging, _openai_target
-    _deduplicator = SemanticDeduplicator(similarity_threshold=threshold)
+    _deduplicator = SemanticDeduplicator(
+        similarity_threshold=threshold,
+        protect_system=protect_system,
+        dedup_tool_results=dedup_tool_results,
+    )
     _enable_logging = enable_log
     if openai_target:
         _openai_target = openai_target.rstrip("/")
 
     print(f"[ContextPrune] Proxy starting on http://{host}:{port}", flush=True)
-    print(f"[ContextPrune] Threshold={threshold} | Logging={'ON' if enable_log else 'OFF'}", flush=True)
+    flags = f"Threshold={threshold} | Logging={'ON' if enable_log else 'OFF'}"
+    flags += f" | protect_system={'ON' if protect_system else 'OFF'}"
+    flags += f" | dedup_tool_results={'ON' if dedup_tool_results else 'OFF'}"
+    print(f"[ContextPrune] {flags}", flush=True)
     print(f"[ContextPrune] OpenAI target: {_openai_target}", flush=True)
     if enable_log:
         print(f"[ContextPrune] Stats → {_stats_path}", flush=True)
@@ -593,6 +604,16 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Base URL for OpenAI-compatible endpoint target (default: https://api.openai.com or CONTEXTPRUNE_OPENAI_TARGET env var)",
     )
+    parser.add_argument(
+        "--no-protect-system",
+        action="store_true",
+        help="Allow the system prompt to be deduplicated (off by default — system prompt is protected)",
+    )
+    parser.add_argument(
+        "--dedup-tool-results",
+        action="store_true",
+        help="Deduplicate tool_result content (off by default — tool results pass through unchanged)",
+    )
     return parser.parse_args()
 
 
@@ -604,4 +625,6 @@ if __name__ == "__main__":
         enable_log=not args.no_log,
         host=args.host,
         openai_target=args.openai_target,
+        protect_system=not args.no_protect_system,
+        dedup_tool_results=args.dedup_tool_results,
     )

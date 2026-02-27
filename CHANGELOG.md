@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5] — 2026-02-26
+
+### Added
+- `--no-protect-system` CLI flag: opt out of system prompt protection from the command line.
+- `--dedup-tool-results` CLI flag: opt in to tool result deduplication from the command line.
+- Both flags are also exposed as parameters on the `serve()` function.
+- Startup log now shows `protect_system` and `dedup_tool_results` status.
+
 ## [0.1.4] — 2026-02-26
 
 ### Changed
