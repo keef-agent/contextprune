@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-225%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)]()
 
 **Cut your LLM token usage by 40-60% with a single environment variable.**
 
@@ -33,7 +33,7 @@ All of these overlap heavily. The model sees the same facts stated four differen
 
 ### The Solution: Semantic Deduplication
 
-ContextPrune encodes every sentence in your context using a lightweight sentence embedding model ([paraphrase-MiniLM-L6-v2](https://www.sbert.net/), 22M params, processes in <50ms per request (15s model load on first call, then cached)). It then computes pairwise cosine similarity between sentences across all messages and removes near-duplicates above a configurable threshold (default: 0.82).
+ContextPrune encodes every sentence in your context using a sentence embedding model ([nomic-embed-text-v1.5](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) by default, with [all-MiniLM-L6-v2](https://www.sbert.net/) as a lightweight fallback). It computes pairwise cosine similarity between sentences across all messages and removes near-duplicates above a configurable threshold (default: 0.82).
 
 This approach is grounded in established NLP research:
 
@@ -44,7 +44,7 @@ This approach is grounded in established NLP research:
 
 ### What Gets Removed
 
-Only sentences that are semantically near-identical to something already in the context. Unique information, reasoning chains, and code are never touched — they have no semantic near-duplicates. ContextPrune has a conservative default threshold and a redundancy guard (mean pairwise similarity must exceed 0.35 to even attempt deduplication) so it passes through unchanged when context isn't redundant.
+Only sentences that are semantically near-identical to something already in the context. Unique information, reasoning chains, and code are never touched — they have no semantic near-duplicates. The conservative default threshold (0.82) means only very close semantic matches are removed; borderline cases are kept.
 
 ---
 
@@ -121,6 +121,8 @@ Claude Code's OAuth Bearer token passes through to api.anthropic.com unchanged. 
 
 **Subscription benefit:** Claude Code compacts context aggressively when usage builds up. With 40%+ fewer tokens per request, compaction events happen significantly less often — you keep more conversation history alive, longer.
 
+To add a `/contextprune` slash command (check proxy status, view stats): tell your agent to copy `integrations/claude-code/contextprune.md` to `~/.claude/commands/contextprune.md`.
+
 ### OpenClaw
 
 In `~/.openclaw/openclaw.json`, set `baseUrl` under whichever provider you use:
@@ -145,14 +147,6 @@ cp -r integrations/openclaw ~/.openclaw/workspace/skills/contextprune
 ```
 
 See [`integrations/openclaw/SKILL.md`](integrations/openclaw/SKILL.md) for what it does.
-
-### Claude Code
-
-Tell your agent to install the slash command:
-
-> "Copy `integrations/claude-code/contextprune.md` to `~/.claude/commands/contextprune.md`"
-
-Once installed, type `/contextprune` to check proxy status and view compression stats. The command file is self-contained — your agent reads it and knows exactly what to do.
 
 ### Codex
 
