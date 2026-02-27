@@ -138,6 +138,14 @@ Restart OpenClaw. OAuth Bearer tokens pass through unchanged — only message co
 
 > **Subscription users:** claude.ai and Codex plans have hourly/daily limits measured in tokens. With 40%+ compression you get significantly more turns before hitting them.
 
+To let your OpenClaw agent manage the proxy automatically (start, stop, check stats), install the skill:
+
+```bash
+cp -r integrations/openclaw ~/.openclaw/workspace/skills/contextprune
+```
+
+See [`integrations/openclaw/SKILL.md`](integrations/openclaw/SKILL.md) for what it does.
+
 ### Claude Code
 
 Copy the slash command to your Claude commands directory:
@@ -147,12 +155,6 @@ cp integrations/claude-code/contextprune.md ~/.claude/commands/contextprune.md
 ```
 
 Then type `/contextprune` in Claude Code to check proxy status and view compression stats.
-
-### OpenClaw
-
-```bash
-cp -r integrations/openclaw ~/.openclaw/workspace/skills/contextprune
-```
 
 ### Codex
 
