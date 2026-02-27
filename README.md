@@ -168,17 +168,9 @@ Full integration docs: [`integrations/`](integrations/README.md)
 
 ## Supported Providers
 
-| Provider | Format | Works |
-|----------|--------|-------|
-| Anthropic API | `/v1/messages` | ✅ |
-| Claude Code (API key or OAuth) | `/v1/messages` | ✅ |
-| OpenAI API | `/v1/responses` + `/v1/chat/completions` | ✅ |
-| Grok (xAI) | OpenAI-compatible | ✅ |
-| OpenRouter | OpenAI-compatible | ✅ |
-| Google Gemini | OpenAI-compatible mode | ✅ |
-| OpenClaw (any provider) | configurable baseUrl | ✅ |
-| OpenAI Codex subscription OAuth | `/v1/responses` | ✅ |
-| claude.ai web / ChatGPT.com | proprietary internal endpoints | ❌ |
+✅ **Works:** Anthropic API, Claude Code (API key or OAuth), OpenAI API, Grok, OpenRouter, Google Gemini, OpenAI Codex OAuth — anything that calls a standard API endpoint.
+
+❌ **Doesn't work:** claude.ai web, ChatGPT.com — browser-based UIs use proprietary internal endpoints that aren't interceptable.
 
 ---
 
