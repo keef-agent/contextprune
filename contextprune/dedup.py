@@ -298,19 +298,65 @@ class SemanticDeduplicator:
                     kept_sys.extend(result)
                 new_system = " ".join(kept_sys) if kept_sys else system
 
+        def dedup_text(text: str) -> str:
+            """Dedup a plain text string, return kept text joined."""
+            if not text.strip():
+                return text
+            chunks = _split_chunks(text, self.chunk_by)
+            kept = process_chunks(chunks)
+            return " ".join(kept) if kept else text
+
+        def dedup_block_list(blocks: List[Any]) -> List[Any]:
+            """Dedup text within a list of typed content blocks.
+
+            Handles Anthropic content arrays: text blocks, tool_result blocks
+            (which carry file/command output), and passes tool_use/image
+            blocks through unchanged.
+            """
+            new_blocks: List[Any] = []
+            for block in blocks:
+                if not isinstance(block, dict):
+                    new_blocks.append(block)
+                    continue
+
+                btype = block.get("type", "")
+
+                if btype == "text":
+                    raw = block.get("text", "")
+                    deduped = dedup_text(raw)
+                    new_block = dict(block)
+                    new_block["text"] = deduped
+                    new_blocks.append(new_block)
+
+                elif btype == "tool_result":
+                    # tool_result.content can be a string or a list of blocks.
+                    # File reads, shell output, etc. end up here — high dedup value.
+                    tc = block.get("content", "")
+                    new_block = dict(block)
+                    if isinstance(tc, str):
+                        new_block["content"] = dedup_text(tc)
+                    elif isinstance(tc, list):
+                        new_block["content"] = dedup_block_list(tc)
+                    new_blocks.append(new_block)
+
+                else:
+                    # tool_use (JSON input), image, etc. — pass through
+                    new_blocks.append(block)
+
+            return new_blocks
+
         # --- Process messages in order ---
         new_messages: List[Dict[str, Any]] = []
         for msg in messages:
             content = msg.get("content", "")
-            if isinstance(content, str) and content.strip():
-                chunks = _split_chunks(content, self.chunk_by)
-                kept_chunks = process_chunks(chunks)
-                new_msg = dict(msg)
-                new_msg["content"] = " ".join(kept_chunks) if kept_chunks else content
-                new_messages.append(new_msg)
-            else:
-                # Non-string content (tool results, images, etc.) — pass through
-                new_messages.append(msg)
+            new_msg = dict(msg)
+            if isinstance(content, str):
+                if content.strip():
+                    new_msg["content"] = dedup_text(content)
+            elif isinstance(content, list):
+                # Anthropic-style typed block arrays (tool_use, tool_result, text)
+                new_msg["content"] = dedup_block_list(content)
+            new_messages.append(new_msg)
 
         return new_messages, new_system, removed_count
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3] — 2026-02-26
+
+### Fixed
+- **Critical: Claude Code and all array-content messages were silently skipped.** The deduplicator only handled `isinstance(content, str)`. The Anthropic API (and every modern Claude Code session) sends message content as typed block arrays (`text`, `tool_use`, `tool_result`). Every Claude Code message hit the `else: pass through` branch — zero deduplication ever occurred. Fix: `dedup_block_list()` recursively processes text blocks and tool_result blocks while passing tool_use/image blocks through unchanged.
+
+### Added
+- 5 new tests in `tests/test_dedup.py::TestBlockListDedup` covering text blocks, tool_result string/list content, tool_use passthrough, and mixed content arrays.
+
 ## [0.1.2] — 2026-02-26
 
 ### Fixed

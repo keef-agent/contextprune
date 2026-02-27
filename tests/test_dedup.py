@@ -389,3 +389,130 @@ def test_graceful_degradation_importerror():
         get_model.cache_clear()  # Clear lru_cache
         with pytest.raises(Exception):
             get_model("all-MiniLM-L6-v2")
+
+
+class TestBlockListDedup:
+    """Tests for deduplication of Anthropic-style typed content block arrays.
+
+    Regression for: messages with list content (tool_use, tool_result, text blocks)
+    were silently passed through without any deduplication because the code only
+    handled isinstance(content, str).  Claude Code always sends content as arrays.
+    """
+
+    def setup_method(self):
+        self.dedup = SemanticDeduplicator(similarity_threshold=0.82)
+
+    def test_text_blocks_in_messages_are_deduped(self):
+        """Text blocks inside content arrays should be deduplicated."""
+        system = "PostgreSQL database on port 5432. The database name is myapp_db."
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Connect to PostgreSQL on port 5432."}
+                ],
+            }
+        ]
+        new_msgs, _, removed = self.dedup.deduplicate(messages, system=system)
+        # The user text is semantically similar to the system — should be stripped
+        assert removed >= 1
+
+    def test_tool_result_string_content_deduped(self):
+        """tool_result with string content should be deduplicated."""
+        # Simulate Claude Code reading a file that contains info already in system
+        system = "The project uses PostgreSQL 14 on localhost port 5432."
+        messages = [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "Read the config file."}],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "tu_1",
+                        "name": "read_file",
+                        "input": {"path": "config.py"},
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tu_1",
+                        "content": "DB_HOST=localhost DB_PORT=5432 DB_NAME=myapp_db # PostgreSQL 14 on port 5432",
+                    }
+                ],
+            },
+        ]
+        _, _, removed = self.dedup.deduplicate(messages, system=system)
+        assert removed >= 1
+
+    def test_tool_use_blocks_pass_through_unchanged(self):
+        """tool_use blocks (JSON input) must never be modified."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "tu_abc",
+                        "name": "write_file",
+                        "input": {"path": "out.py", "content": "print('hello')"},
+                    }
+                ],
+            }
+        ]
+        new_msgs, _, _ = self.dedup.deduplicate(messages)
+        block = new_msgs[0]["content"][0]
+        assert block["type"] == "tool_use"
+        assert block["id"] == "tu_abc"
+        assert block["input"] == {"path": "out.py", "content": "print('hello')"}
+
+    def test_mixed_content_array_preserves_structure(self):
+        """Mixed arrays (text + tool_use) preserve block count and structure."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "I will read the file now."},
+                    {
+                        "type": "tool_use",
+                        "id": "tu_1",
+                        "name": "read_file",
+                        "input": {"path": "README.md"},
+                    },
+                ],
+            }
+        ]
+        new_msgs, _, _ = self.dedup.deduplicate(messages)
+        blocks = new_msgs[0]["content"]
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "text"
+        assert blocks[1]["type"] == "tool_use"
+
+    def test_tool_result_block_list_content_deduped(self):
+        """tool_result.content as a list of text blocks should also be deduped."""
+        system = "The project uses PostgreSQL 14 on port 5432."
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tu_1",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "PostgreSQL 14 running on port 5432. Database: myapp.",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+        _, _, removed = self.dedup.deduplicate(messages, system=system)
+        assert removed >= 1

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "contextprune"
-version = "0.1.2"
+version = "0.1.3"
 description = "Cut your LLM API costs by 40-80% with 2 lines of code"
 readme = "README.md"
 license = "MIT"
