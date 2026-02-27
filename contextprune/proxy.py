@@ -198,7 +198,7 @@ async def proxy_messages(request: Request) -> Response:
             flush=True,
         )
     print(
-        f"[ContextPrune] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
+        f"[ContextPrune] Q{q} ratio={ratio:.3f} removed={removed}sents saved={saved}/{orig_tok}tok",
         flush=True,
     )
 
@@ -316,7 +316,7 @@ async def proxy_chat_completions(request: Request) -> Response:
             flush=True,
         )
     print(
-        f"[ContextPrune/OAI] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
+        f"[ContextPrune/OAI] Q{q} ratio={ratio:.3f} removed={removed}sents saved={saved}/{orig_tok}tok",
         flush=True,
     )
 
@@ -450,7 +450,7 @@ async def proxy_responses(request: Request) -> Response:
             flush=True,
         )
     print(
-        f"[ContextPrune/Responses] Q{q} ratio={ratio:.2f} removed={removed}sents saved={saved}tok",
+        f"[ContextPrune/Responses] Q{q} ratio={ratio:.3f} removed={removed}sents saved={saved}/{orig_tok}tok",
         flush=True,
     )
 
