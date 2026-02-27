@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.4] — 2026-02-26
+
+### Changed
+- `dedup_tool_results=False` is now the default. Tool results (file reads, shell output, API responses) are passed through unchanged. Their content is still added to the seen pool so later messages don't repeat them, but the tool_result itself is never modified. Stripping sentences from raw factual data can silently corrupt the agent's view of file contents.
+- Set `dedup_tool_results=True` to opt in to the old behavior.
+
+### Added
+- 2 new tests: `test_tool_result_passed_through_by_default` and `test_tool_result_deduped_when_opt_in`.
+
 ## [0.1.3] — 2026-02-26
 
 ### Fixed

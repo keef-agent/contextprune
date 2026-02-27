@@ -138,6 +138,7 @@ class SemanticDeduplicator:
         min_chunk_tokens: int = 5,
         preserve_first: bool = True,
         protect_system: bool = True,
+        dedup_tool_results: bool = False,
     ) -> None:
         """Initialize the deduplicator.
 
@@ -163,6 +164,17 @@ class SemanticDeduplicator:
                 contains genuine redundancy and you have validated that removing
                 it does not affect task completion. See safety note in the class
                 docstring.
+            dedup_tool_results: If True, deduplicate content inside tool_result
+                blocks (file reads, shell output, etc.) against the seen pool.
+                Default: False.
+
+                Tool results contain raw factual data — file contents, command
+                output, API responses. Stripping sentences from them can give
+                the model an incomplete or misleading view of the actual data,
+                which can cause silent reasoning errors. Enable only if you have
+                verified that your tool outputs genuinely repeat context already
+                present elsewhere and that the model does not need to see the
+                full output to complete the task.
         """
         # Normalize shorthand model names
         if model == "minilm":
@@ -173,6 +185,7 @@ class SemanticDeduplicator:
         self.min_chunk_tokens = min_chunk_tokens
         self.preserve_first = preserve_first
         self.protect_system = protect_system
+        self.dedup_tool_results = dedup_tool_results
         self.removal_log: List[Tuple[str, str, float]] = []
 
     def deduplicate(
@@ -330,14 +343,33 @@ class SemanticDeduplicator:
 
                 elif btype == "tool_result":
                     # tool_result.content can be a string or a list of blocks.
-                    # File reads, shell output, etc. end up here — high dedup value.
-                    tc = block.get("content", "")
-                    new_block = dict(block)
-                    if isinstance(tc, str):
-                        new_block["content"] = dedup_text(tc)
-                    elif isinstance(tc, list):
-                        new_block["content"] = dedup_block_list(tc)
-                    new_blocks.append(new_block)
+                    # File reads, shell output, etc. end up here.
+                    # Only dedup if explicitly enabled — stripping sentences from
+                    # raw file/command output can silently corrupt the agent's
+                    # view of the data.
+                    if self.dedup_tool_results:
+                        tc = block.get("content", "")
+                        new_block = dict(block)
+                        if isinstance(tc, str):
+                            new_block["content"] = dedup_text(tc)
+                        elif isinstance(tc, list):
+                            new_block["content"] = dedup_block_list(tc)
+                        new_blocks.append(new_block)
+                    else:
+                        # tool_result chunks are still added to the seen pool
+                        # (so later messages don't repeat them), but the
+                        # tool_result itself is forwarded unchanged.
+                        tc = block.get("content", "")
+                        if isinstance(tc, str) and tc.strip():
+                            chunks = _split_chunks(tc, self.chunk_by)
+                            process_chunks(chunks)  # seed the pool, discard output
+                        elif isinstance(tc, list):
+                            for inner in tc:
+                                if isinstance(inner, dict) and inner.get("type") == "text":
+                                    t = inner.get("text", "")
+                                    if t.strip():
+                                        process_chunks(_split_chunks(t, self.chunk_by))
+                        new_blocks.append(block)
 
                 else:
                     # tool_use (JSON input), image, etc. — pass through

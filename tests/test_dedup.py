@@ -417,9 +417,13 @@ class TestBlockListDedup:
         # The user text is semantically similar to the system — should be stripped
         assert removed >= 1
 
-    def test_tool_result_string_content_deduped(self):
-        """tool_result with string content should be deduplicated."""
-        # Simulate Claude Code reading a file that contains info already in system
+    def test_tool_result_passed_through_by_default(self):
+        """tool_result content must NOT be deduped by default (dedup_tool_results=False).
+
+        Stripping lines from file reads can silently corrupt the agent's view
+        of the data.  Tool results are passed through unchanged; their content
+        is still added to the seen pool so later messages don't repeat them.
+        """
         system = "The project uses PostgreSQL 14 on localhost port 5432."
         messages = [
             {
@@ -448,7 +452,32 @@ class TestBlockListDedup:
                 ],
             },
         ]
-        _, _, removed = self.dedup.deduplicate(messages, system=system)
+        new_msgs, _, removed = self.dedup.deduplicate(messages, system=system)
+        # tool_result content must be unchanged
+        tool_result_block = new_msgs[2]["content"][0]
+        assert tool_result_block["content"] == "DB_HOST=localhost DB_PORT=5432 DB_NAME=myapp_db # PostgreSQL 14 on port 5432"
+
+    def test_tool_result_deduped_when_opt_in(self):
+        """tool_result content IS deduped when dedup_tool_results=True."""
+        from contextprune.dedup import SemanticDeduplicator
+        dedup_with_tr = SemanticDeduplicator(
+            similarity_threshold=0.82,
+            dedup_tool_results=True,
+        )
+        system = "The project uses PostgreSQL 14 on localhost port 5432."
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tu_1",
+                        "content": "DB_HOST=localhost DB_PORT=5432 # PostgreSQL 14 on port 5432",
+                    }
+                ],
+            },
+        ]
+        _, _, removed = dedup_with_tr.deduplicate(messages, system=system)
         assert removed >= 1
 
     def test_tool_use_blocks_pass_through_unchanged(self):
@@ -494,9 +523,12 @@ class TestBlockListDedup:
         assert blocks[0]["type"] == "text"
         assert blocks[1]["type"] == "tool_use"
 
-    def test_tool_result_block_list_content_deduped(self):
-        """tool_result.content as a list of text blocks should also be deduped."""
-        system = "The project uses PostgreSQL 14 on port 5432."
+    def test_tool_result_block_list_seeds_pool_by_default(self):
+        """tool_result block-list content seeds the seen pool even when not deduped.
+
+        A later user message repeating tool_result content should be stripped.
+        """
+        system = "System context unrelated to PostgreSQL."
         messages = [
             {
                 "role": "user",
@@ -512,7 +544,12 @@ class TestBlockListDedup:
                         ],
                     }
                 ],
-            }
+            },
+            {
+                "role": "user",
+                "content": "PostgreSQL 14 is running on port 5432 with database myapp.",
+            },
         ]
         _, _, removed = self.dedup.deduplicate(messages, system=system)
+        # The second user message repeats the tool_result — should be removed
         assert removed >= 1
