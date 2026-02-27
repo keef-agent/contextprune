@@ -123,37 +123,20 @@ Claude Code's OAuth Bearer token passes through to api.anthropic.com unchanged. 
 
 ### OpenClaw
 
-In `~/.openclaw/openclaw.json`, under the provider you want to compress:
+In `~/.openclaw/openclaw.json`, set `baseUrl` under whichever provider you use:
 
 ```json
 "models": {
   "providers": {
-    "anthropic": {
-      "baseUrl": "http://localhost:8899"
-    }
+    "anthropic": { "baseUrl": "http://localhost:8899" },
+    "openai":    { "baseUrl": "http://localhost:8899" }
   }
 }
 ```
 
-Restart OpenClaw. Measured 46% reduction on a live 2-hour session.
+Restart OpenClaw. OAuth Bearer tokens pass through unchanged — only message content is deduplicated. Measured 46% reduction on a live 2-hour session.
 
-### OpenClaw with OAuth subscription (Codex / openai-codex provider)
-
-The `openai-codex` provider uses OAuth Bearer tokens but still calls `api.openai.com/v1/responses` — the standard Responses API. ContextPrune intercepts it:
-
-```json
-"models": {
-  "providers": {
-    "openai": {
-      "baseUrl": "http://localhost:8899"
-    }
-  }
-}
-```
-
-Your OAuth token passes through unchanged. Only the message content is deduplicated.
-
-**Subscription benefit:** Codex subscription plans have hourly/daily usage limits measured in tokens. With 40%+ compression, you get significantly more agent turns before hitting those limits.
+> **Subscription users:** claude.ai and Codex plans have hourly/daily limits measured in tokens. With 40%+ compression you get significantly more turns before hitting them.
 
 ### Claude Code
 
