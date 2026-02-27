@@ -199,8 +199,9 @@ Only do this if you have measured that your system prompt contains genuine redun
 
 ### Dry-run test (no API key needed)
 
-Add `"__contextprune_dry_run": true` to any request body to skip forwarding and get compression stats back directly:
+Add `"__contextprune_dry_run": true` to any request body to skip forwarding and get compression stats back directly.
 
+**macOS / Linux:**
 ```bash
 curl -X POST http://localhost:8899/v1/messages \
   -H "Content-Type: application/json" \
@@ -212,6 +213,12 @@ curl -X POST http://localhost:8899/v1/messages \
     "messages": [{"role": "user", "content": "Acme Corp was founded in 1987. They make enterprise software. What year was Acme Corp founded?"}],
     "__contextprune_dry_run": true
   }'
+```
+
+**Windows (PowerShell):**
+```powershell
+'{"model":"claude-sonnet-4-6","max_tokens":10,"system":"You are a helpful assistant. Acme Corp was founded in 1987 and makes enterprise software.","messages":[{"role":"user","content":"Acme Corp was founded in 1987. They make enterprise software. What year?"}],"__contextprune_dry_run":true}' | Out-File -Encoding utf8 $env:TEMP\cp_test.json
+curl.exe -X POST http://localhost:8899/v1/messages -H "Content-Type: application/json" -H "x-api-key: test" -d "@$env:TEMP\cp_test.json"
 ```
 
 Response:
