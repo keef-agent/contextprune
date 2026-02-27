@@ -148,25 +148,19 @@ See [`integrations/openclaw/SKILL.md`](integrations/openclaw/SKILL.md) for what 
 
 ### Claude Code
 
-Copy the slash command to your Claude commands directory:
+Tell your agent to install the slash command:
 
-```bash
-cp integrations/claude-code/contextprune.md ~/.claude/commands/contextprune.md
-```
+> "Copy `integrations/claude-code/contextprune.md` to `~/.claude/commands/contextprune.md`"
 
-Then type `/contextprune` in Claude Code to check proxy status and view compression stats.
+Once installed, type `/contextprune` to check proxy status and view compression stats. The command file is self-contained — your agent reads it and knows exactly what to do.
 
 ### Codex
 
-```bash
-cp -r integrations/codex ~/.codex/workspace/skills/contextprune
-```
+Codex doesn't have a skills directory. Tell your agent to:
 
-For any [agentskills.io](https://agentskills.io)-compatible framework:
+> "Read `integrations/codex/SKILL.md` and follow the setup instructions."
 
-```bash
-cp -r integrations/openclaw ~/.agents/skills/contextprune
-```
+The skill file walks through install, env var config, and stat checking. Your agent can execute all of it directly.
 
 Full integration docs: [`integrations/`](integrations/README.md)
 
