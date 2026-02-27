@@ -68,6 +68,6 @@ Measured on live sessions (not synthetic benchmarks):
 | Context type | Reduction |
 |---|---|
 | 2-hour agentic session (large system prompt + memory files + tool outputs) | **46%** |
-| Non-redundant context | **0%** (redundancy guard fires correctly) |
+| Non-redundant context | **0%** (no chunks exceed the 0.82 similarity threshold) |
 
 The 46% result was measured on a live OpenClaw agent session running Claude Sonnet 4.6, with a large system prompt (~8K tokens), multiple injected memory files, and accumulated tool outputs across a 2-hour run. Token counts before and after deduplication were recorded per-request via `stats.jsonl`.

@@ -30,17 +30,7 @@ OpenClaw will pick it up automatically on next session start.
 
 ## Codex
 
-Copy the skill to your Codex workspace:
-
-```bash
-cp -r integrations/codex ~/.codex/workspace/skills/contextprune
-```
-
-Or for any [agentskills.io](https://agentskills.io)-compatible framework:
-
-```bash
-cp -r integrations/openclaw ~/.agents/skills/contextprune
-```
+Codex doesn't have a skills directory. Tell your agent to read `integrations/codex/SKILL.md` and follow the setup instructions. The skill walks through install, env var config, and stat checking.
 
 ## Shared References
 
