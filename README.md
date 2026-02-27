@@ -168,7 +168,7 @@ Full integration docs: [`integrations/`](integrations/README.md)
 
 ## Supported Providers
 
-✅ **Works:** Anthropic API, Claude Code (API key or OAuth), OpenAI API, Grok, OpenRouter, Google Gemini, OpenAI Codex OAuth — anything that calls a standard API endpoint.
+✅ **Works:** Anthropic API, Claude Code (API key or OAuth), OpenAI API (API key or Codex OAuth), Grok, OpenRouter, Google Gemini — anything that calls a standard API endpoint.
 
 ❌ **Doesn't work:** claude.ai web, ChatGPT.com — browser-based UIs use proprietary internal endpoints that aren't interceptable.
 
