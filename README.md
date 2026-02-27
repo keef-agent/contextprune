@@ -220,6 +220,24 @@ dedup = SemanticDeduplicator(protect_system=False)
 
 Only do this if you have measured that your system prompt contains genuine redundancy and validated that removing it doesn't affect task completion.
 
+### Tool result protection
+
+By default, ContextPrune **never modifies tool_result content** (`dedup_tool_results=False`). File reads, shell output, and API responses pass through unchanged.
+
+Tool results are still read into the deduplication pool — so if a later assistant message repeats something from a file the agent already read, that repetition will be stripped. But the file content itself is never touched.
+
+This is the right default. Tool results contain raw factual data. Removing sentences from a file read can give the model an incomplete or misleading view of the actual content, which causes silent reasoning errors that are hard to debug.
+
+To opt in to deduplicating tool result content (Python API only):
+
+```python
+from contextprune.dedup import SemanticDeduplicator
+
+dedup = SemanticDeduplicator(dedup_tool_results=True)
+```
+
+Only do this if your tool outputs genuinely repeat context already present elsewhere (e.g. a tool that echoes back the system prompt as part of its response) and you have verified the model does not need the full output.
+
 ### Dry-run test (no API key needed)
 
 Add `"__contextprune_dry_run": true` to any request body to skip forwarding and get compression stats back directly.
