@@ -5,7 +5,7 @@ ContextPrune works with OAuth subscription tokens in some scenarios.
 ## What works
 
 ### Claude Code (claude.ai subscription)
-If you use Claude Code with your claude.ai Pro/Max subscription (OAuth mode via `claude auth login`), ContextPrune intercepts at the API level — it works because Claude Code still calls `api.anthropic.com` in standard Messages API format.
+If you use Claude Code with your claude.ai Pro/Max subscription (OAuth mode via `claude auth login`), ContextPrune intercepts at the API level. This works because Claude Code still calls `api.anthropic.com` in standard Messages API format.
 
 ```bash
 contextprune serve --port 8899
@@ -28,7 +28,7 @@ export OPENAI_BASE_URL=http://localhost:8899
 
 Your Bearer token passes through to api.openai.com unchanged. ContextPrune deduplicates the `input` array and `instructions` field before forwarding.
 
-**Why this matters:** The Responses API is used by the OpenAI Agents SDK, Codex CLI, and any framework routing through `openai-codex`. With long agentic sessions, context repetition compounds quickly — ContextPrune removes it before it reaches the model.
+**Why this matters:** The Responses API is used by the OpenAI Agents SDK, Codex CLI, and any framework routing through `openai-codex`. With long agentic sessions, context repetition compounds quickly. ContextPrune removes it before it reaches the model.
 
 ### OpenRouter (any provider)
 OpenRouter supports OAuth-style API keys. Set target to OpenRouter:

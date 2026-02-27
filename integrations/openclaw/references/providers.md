@@ -42,7 +42,7 @@ contextprune serve --port 8899 --openai-target https://openrouter.ai/api/v1
 contextprune serve --port 8899 --openai-target https://generativelanguage.googleapis.com/v1beta/openai
 ```
 
-Anthropic target is always `https://api.anthropic.com` — not configurable via this flag.
+Anthropic target is always `https://api.anthropic.com`. Not configurable via this flag.
 
 ## OpenClaw Config
 
@@ -74,7 +74,7 @@ Anthropic target is always `https://api.anthropic.com` — not configurable via 
 }
 ```
 
-OAuth Bearer tokens pass through unchanged. ContextPrune strips only message content — auth headers are never modified.
+OAuth Bearer tokens pass through unchanged. ContextPrune strips only message content. Auth headers are never modified.
 
 ## What Passes Through Unchanged
 
@@ -82,4 +82,4 @@ OAuth Bearer tokens pass through unchanged. ContextPrune strips only message con
 - Model selection (`model` field)
 - Streaming requests (`"stream": true`) — passed through without deduplication
 - Request metadata (temperature, max_tokens, stop sequences, etc.)
-- Any context below the redundancy guard threshold (mean pairwise similarity < 0.35)
+- Non-redundant contexts where no chunks exceed the similarity threshold

@@ -56,7 +56,7 @@ For the `openai-codex` provider (Codex OAuth subscription):
 }
 ```
 
-Restart OpenClaw after editing. OAuth Bearer tokens pass through unchanged — only message content is deduplicated.
+Restart OpenClaw after editing. OAuth Bearer tokens pass through unchanged. Only message content is deduplicated.
 
 ## Check Stats
 
@@ -109,7 +109,7 @@ Rule of thumb:
 - `0.82`: default, works well for most cases
 - `0.85-0.90`: conservative, use when context has intentional near-repetition (e.g., structured templates)
 
-A redundancy guard prevents deduplication entirely when mean pairwise similarity is below 0.35 — so non-redundant contexts always pass through unchanged.
+Non-redundant contexts pass through unchanged. Nothing is removed if no chunks exceed the similarity threshold.
 
 ## Provider Routing
 

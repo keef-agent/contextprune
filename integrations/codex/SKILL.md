@@ -1,6 +1,6 @@
 ---
 name: contextprune
-description: Start, stop, and manage the ContextPrune semantic deduplication proxy for Codex sessions. Use when: starting the proxy before a Codex session, checking compression stats, or configuring threshold and provider routing. ContextPrune intercepts Codex API calls and removes semantically redundant content before forwarding to the model — no code changes required.
+description: Start, stop, and manage the ContextPrune semantic deduplication proxy for Codex sessions. Use when: starting the proxy before a Codex session, checking compression stats, or configuring threshold and provider routing. ContextPrune intercepts Codex API calls and removes semantically redundant content before forwarding to the model. No code changes required.
 ---
 
 # ContextPrune Skill — Codex
@@ -45,8 +45,7 @@ In your Codex workspace config (`~/.codex/config.json` or equivalent), set the
 ```
 
 For the `openai-codex` OAuth subscription provider, the proxy intercepts the
-`/v1/responses` endpoint transparently. OAuth Bearer tokens pass through unchanged —
-only message content is deduplicated.
+`/v1/responses` endpoint transparently. OAuth Bearer tokens pass through unchanged. Only message content is deduplicated.
 
 ## Check Stats
 
@@ -96,8 +95,7 @@ contextprune serve --port 8899 --openai-target https://api.openai.com --threshol
 contextprune serve --port 8899 --openai-target https://api.openai.com --threshold 0.88
 ```
 
-A redundancy guard prevents deduplication entirely when mean pairwise similarity is
-below 0.35 — non-redundant contexts always pass through unchanged.
+Non-redundant contexts pass through unchanged. Nothing is removed if no chunks exceed the similarity threshold.
 
 ## System Prompt Safety
 

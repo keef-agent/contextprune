@@ -35,16 +35,16 @@ All of these overlap heavily. The model sees the same facts stated four differen
 
 ContextPrune encodes every sentence in your context using a sentence embedding model ([nomic-embed-text-v1.5](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) by default, with [all-MiniLM-L6-v2](https://www.sbert.net/) as a lightweight fallback). It computes pairwise cosine similarity between sentences across all messages and removes near-duplicates above a configurable threshold (default: 0.82).
 
-This approach is grounded in established NLP research:
+This approach is backed by NLP research:
 
 - **Semantic deduplication via embeddings**: Broadly validated in retrieval-augmented generation literature (RAG dedup). Similar similarity thresholds (0.8-0.85) are standard in RAG pipelines for chunk deduplication.
-- **LLMLingua** ([Jiang et al., 2023](https://arxiv.org/abs/2310.05736)): Demonstrated 20x compression with <1.5% accuracy loss using token-level importance scoring. ContextPrune uses sentence-level semantic similarity instead — safer for agent contexts where removing wrong tokens causes hallucination.
-- **ACON** ([Kang et al., Microsoft, 2025](https://arxiv.org/abs/2510.00615)): Validated that 26-54% context reduction is achievable in agentic workloads by targeting the agent memory + tool output + history overlap — the same redundancy ContextPrune removes. Uses a different method (guideline optimization via failure analysis) but independently confirms the problem magnitude.
-- **Token Elasticity / TALE** ([Han et al., 2024](https://arxiv.org/abs/2412.18547)): Quantified that models require explicit, calibrated token budgets — vague instructions like "be concise" don't work. ContextPrune removes redundancy at the infrastructure level instead, bypassing this problem entirely.
+- **LLMLingua** ([Jiang et al., 2023](https://arxiv.org/abs/2310.05736)): Demonstrated 20x compression with <1.5% accuracy loss using token-level importance scoring. ContextPrune uses sentence-level semantic similarity instead, which is safer for agent contexts where removing wrong tokens causes hallucination.
+- **ACON** ([Kang et al., Microsoft, 2025](https://arxiv.org/abs/2510.00615)): Validated that 26-54% context reduction is achievable in agentic workloads by targeting the agent memory + tool output + history overlap, which is the same redundancy ContextPrune removes. Uses a different method (guideline optimization via failure analysis) but independently confirms the problem magnitude.
+- **Token Elasticity / TALE** ([Han et al., 2024](https://arxiv.org/abs/2412.18547)): Quantified that models require explicit, calibrated token budgets. Vague instructions like "be concise" don't work. ContextPrune removes redundancy at the infrastructure level instead, bypassing this entirely.
 
 ### What Gets Removed
 
-Only sentences that are semantically near-identical to something already in the context. Unique information, reasoning chains, and code are never touched — they have no semantic near-duplicates. The conservative default threshold (0.82) means only very close semantic matches are removed; borderline cases are kept.
+Only sentences that are semantically near-identical to something already in the context. Unique information, reasoning chains, and code are never touched. They have no semantic near-duplicates. The conservative default threshold (0.82) means only very close semantic matches are removed; borderline cases are kept.
 
 ---
 
@@ -119,7 +119,7 @@ claude
 
 Claude Code's OAuth Bearer token passes through to api.anthropic.com unchanged. ContextPrune only touches message content.
 
-**Subscription benefit:** Claude Code compacts context aggressively when usage builds up. With 40%+ fewer tokens per request, compaction events happen significantly less often — you keep more conversation history alive, longer.
+**Subscription benefit:** Claude Code compacts context aggressively when usage builds up. With 40%+ fewer tokens per request, compaction events happen significantly less often. You keep more conversation history alive, longer.
 
 To add a `/contextprune` slash command (check proxy status, view stats): tell your agent to copy `integrations/claude-code/contextprune.md` to `~/.claude/commands/contextprune.md`.
 
@@ -136,7 +136,7 @@ In `~/.openclaw/openclaw.json`, set `baseUrl` under whichever provider you use:
 }
 ```
 
-Restart OpenClaw. OAuth Bearer tokens pass through unchanged — only message content is deduplicated. Measured 46% reduction on a live 2-hour session.
+Restart OpenClaw. OAuth Bearer tokens pass through unchanged. Only message content is deduplicated. Measured 46% reduction on a live 2-hour session.
 
 > **Subscription users:** claude.ai and Codex plans have hourly/daily limits measured in tokens. With 40%+ compression you get significantly more turns before hitting them.
 
@@ -162,9 +162,9 @@ Full integration docs: [`integrations/`](integrations/README.md)
 
 ## Supported Providers
 
-✅ **Works:** Anthropic / Claude Code (API key or OAuth), OpenAI / Codex (API key or OAuth), Grok, OpenRouter, Google Gemini — anything that calls a standard API endpoint.
+✅ **Works:** Anthropic / Claude Code (API key or OAuth), OpenAI / Codex (API key or OAuth), Grok, OpenRouter, Google Gemini. Any framework that calls a standard API endpoint.
 
-❌ **Doesn't work:** claude.ai web, ChatGPT.com — browser-based UIs use proprietary internal endpoints that aren't interceptable.
+❌ **Doesn't work:** claude.ai web, ChatGPT.com. Browser-based UIs use proprietary internal endpoints that aren't interceptable.
 
 ---
 
@@ -185,7 +185,7 @@ contextprune serve --port 8899 --log
 
 By default, ContextPrune **never modifies the system prompt** (`protect_system=True`). All system chunks are added to the deduplication pool (so redundant content in *messages* is still stripped), but the system prompt itself is returned byte-for-byte unchanged.
 
-This is the safe default. Research on compression-induced instruction failures ([arXiv 2510.00231](https://arxiv.org/abs/2510.00231)) showed that removing semantically similar instructions from a system prompt — even when they look redundant — can silently cause the model to stop following them.
+This is the safe default. Research on compression-induced instruction failures ([arXiv 2510.00231](https://arxiv.org/abs/2510.00231)) showed that removing semantically similar instructions from a system prompt, even when they look redundant, can silently cause the model to stop following them.
 
 To opt out (Python API only):
 
@@ -245,4 +245,4 @@ Deduplication runs on the input for all requests, including streaming ones. The 
 
 ## License
 
-MIT. Local only — no data sent anywhere except the LLM you configure.
+MIT. Local only. No data sent anywhere except the LLM you configure.
