@@ -38,6 +38,50 @@ _deduplicator: Optional[SemanticDeduplicator] = None
 _enable_logging: bool = True
 _stats_path: Path = Path.home() / ".contextprune" / "stats.jsonl"
 _request_counter: int = 0
+
+# Headers that must not be forwarded verbatim on streaming responses.
+# Passing content-length with chunked/streaming body causes HPE_UNEXPECTED_CONTENT_LENGTH.
+_STRIP_RESPONSE_HEADERS = {"content-encoding", "content-length", "transfer-encoding"}
+
+
+async def _make_streaming_response(
+    method: str,
+    url: str,
+    headers: dict,
+    json_body: dict,
+) -> StreamingResponse:
+    """Proxy a streaming upstream request without closing the stream prematurely.
+
+    The bug with `async with client.stream() as resp: return StreamingResponse(resp.aiter_bytes())`
+    is that the context managers exit (closing the stream) the moment the function returns,
+    before starlette has consumed any chunks.  The fix: own the context managers inside the
+    generator so they stay alive until the last byte is yielded.
+    """
+    client = httpx.AsyncClient(timeout=120)
+    stream_ctx = client.stream(method, url, headers=headers, json=json_body)
+    resp = await stream_ctx.__aenter__()
+
+    status_code = resp.status_code
+    safe_headers = {
+        k: v for k, v in resp.headers.items()
+        if k.lower() not in _STRIP_RESPONSE_HEADERS
+    }
+    media_type = resp.headers.get("content-type", "text/event-stream")
+
+    async def _generate():
+        try:
+            async for chunk in resp.aiter_bytes():
+                yield chunk
+        finally:
+            await stream_ctx.__aexit__(None, None, None)
+            await client.aclose()
+
+    return StreamingResponse(
+        _generate(),
+        status_code=status_code,
+        headers=safe_headers,
+        media_type=media_type,
+    )
 _openai_target: str = os.environ.get("CONTEXTPRUNE_OPENAI_TARGET", "https://api.openai.com")
 
 log = logging.getLogger("contextprune.proxy")
@@ -194,20 +238,9 @@ async def proxy_messages(request: Request) -> Response:
     try:
         if is_stream:
             # Dedup was applied to input; forward deduplicated body as streaming request
-            async with httpx.AsyncClient(timeout=120) as client:
-                upstream = client.stream(
-                    "POST",
-                    f"{ANTHROPIC_BASE}/v1/messages",
-                    headers=headers,
-                    json=modified_body,
-                )
-                async with upstream as resp:
-                    return StreamingResponse(
-                        resp.aiter_bytes(),
-                        status_code=resp.status_code,
-                        headers=dict(resp.headers),
-                        media_type=resp.headers.get("content-type", "text/event-stream"),
-                    )
+            return await _make_streaming_response(
+                "POST", f"{ANTHROPIC_BASE}/v1/messages", headers, modified_body
+            )
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{ANTHROPIC_BASE}/v1/messages",
@@ -323,20 +356,9 @@ async def proxy_chat_completions(request: Request) -> Response:
     try:
         if is_stream:
             # Dedup was applied to input; forward deduplicated body as streaming request
-            async with httpx.AsyncClient(timeout=120) as client:
-                upstream = client.stream(
-                    "POST",
-                    f"{target_base}/v1/chat/completions",
-                    headers=headers,
-                    json=modified_body,
-                )
-                async with upstream as resp:
-                    return StreamingResponse(
-                        resp.aiter_bytes(),
-                        status_code=resp.status_code,
-                        headers=dict(resp.headers),
-                        media_type=resp.headers.get("content-type", "text/event-stream"),
-                    )
+            return await _make_streaming_response(
+                "POST", f"{target_base}/v1/chat/completions", headers, modified_body
+            )
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{target_base}/v1/chat/completions",
@@ -471,20 +493,9 @@ async def proxy_responses(request: Request) -> Response:
     try:
         if is_stream:
             # Dedup was applied to input; forward deduplicated body as streaming request
-            async with httpx.AsyncClient(timeout=120) as client:
-                upstream = client.stream(
-                    "POST",
-                    f"{target_base}/v1/responses",
-                    headers=headers,
-                    json=modified_body,
-                )
-                async with upstream as resp:
-                    return StreamingResponse(
-                        resp.aiter_bytes(),
-                        status_code=resp.status_code,
-                        headers=dict(resp.headers),
-                        media_type=resp.headers.get("content-type", "text/event-stream"),
-                    )
+            return await _make_streaming_response(
+                "POST", f"{target_base}/v1/responses", headers, modified_body
+            )
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{target_base}/v1/responses",

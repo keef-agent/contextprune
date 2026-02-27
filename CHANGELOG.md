@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.2] — 2026-02-26
+
+### Fixed
+- `httpx.StreamClosed` crash on streaming responses (`stream=True`). The proxy was closing the httpx client and response stream immediately after returning `StreamingResponse(resp.aiter_bytes())` — before starlette consumed any chunks. Fix: context managers now live inside the generator via `_make_streaming_response()`, so the stream stays open until the last byte is yielded.
+- `HPE_UNEXPECTED_CONTENT_LENGTH` error in clients (including Claude Code) caused by forwarding the upstream `content-length` header on chunked streaming responses. Stripped via `_STRIP_RESPONSE_HEADERS`.
+
+### Added
+- 3 regression tests in `tests/test_proxy_streaming.py` covering chunk consumption, header stripping, and upstream status code forwarding.
+
 ## [0.1.1] — 2026-02-26
 
 ### Added
