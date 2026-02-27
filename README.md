@@ -66,9 +66,22 @@ contextprune serve --port 8899
 
 ### Set one environment variable
 
+**macOS / Linux:**
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8899   # Anthropic API
 export OPENAI_BASE_URL=http://localhost:8899       # OpenAI API
+```
+
+**Windows (PowerShell, current session):**
+```powershell
+$env:ANTHROPIC_BASE_URL = "http://localhost:8899"
+$env:OPENAI_BASE_URL    = "http://localhost:8899"
+```
+
+**Windows (permanent, survives restarts):**
+```powershell
+[System.Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", "http://localhost:8899", "User")
+[System.Environment]::SetEnvironmentVariable("OPENAI_BASE_URL",    "http://localhost:8899", "User")
 ```
 
 That's it. Every LLM API call from any framework now goes through ContextPrune first.
@@ -92,10 +105,12 @@ ContextPrune supports all three major API formats:
 contextprune serve --port 8899
 
 # Anthropic
-export ANTHROPIC_BASE_URL=http://localhost:8899
+export ANTHROPIC_BASE_URL=http://localhost:8899        # macOS/Linux
+# $env:ANTHROPIC_BASE_URL = "http://localhost:8899"    # Windows PowerShell
 
 # OpenAI / Grok / OpenRouter
-export OPENAI_BASE_URL=http://localhost:8899
+export OPENAI_BASE_URL=http://localhost:8899           # macOS/Linux
+# $env:OPENAI_BASE_URL = "http://localhost:8899"       # Windows PowerShell
 
 # OpenRouter (point to OpenRouter as target)
 contextprune serve --port 8899 --openai-target https://openrouter.ai/api/v1
@@ -109,11 +124,19 @@ contextprune serve --port 8899 --openai-target https://generativelanguage.google
 
 ### Claude Code
 
-Works with both API key and claude.ai OAuth subscription:
+Works with both API key and claude.ai OAuth subscription.
 
+**macOS / Linux:**
 ```bash
 contextprune serve --port 8899
 export ANTHROPIC_BASE_URL=http://localhost:8899
+claude
+```
+
+**Windows (PowerShell — run all three in the same terminal):**
+```powershell
+contextprune serve --port 8899
+$env:ANTHROPIC_BASE_URL = "http://localhost:8899"
 claude
 ```
 
